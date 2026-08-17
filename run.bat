@@ -4,14 +4,6 @@ cd /d "%~dp0"
 set "APP_JAR=target\linova-one-erp.jar"
 set "MAVEN_REPO=build\maven-repository"
 
-if "%~1"=="" (
-  where wscript >nul 2>nul
-  if not errorlevel 1 (
-    wscript //nologo "%~dp0LinovaOneERP.vbs"
-    exit /b 0
-  )
-)
-
 call :build_app
 if errorlevel 1 exit /b 1
 

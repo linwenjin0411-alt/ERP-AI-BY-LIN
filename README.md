@@ -34,15 +34,9 @@ Silent desktop startup:
 Double-click LinovaOneERP.exe
 ```
 
-Fallback script startup:
+Daily desktop use should start from `LinovaOneERP.exe`. It launches `run.bat` in the background without opening a command window.
 
-```text
-Double-click LinovaOneERP.vbs
-```
-
-Daily desktop use should start from `LinovaOneERP.exe`. It launches the hidden VBS desktop starter without opening a command window. `run.bat` is kept mainly for maintenance commands.
-
-When `LinovaOneERP.exe` or `LinovaOneERP.vbs` is opened, the launcher runs Maven in the background, builds `target/linova-one-erp.jar`, then starts the desktop app with `javaw`.
+When `LinovaOneERP.exe` is opened, the launcher runs Maven in the background, builds `target/linova-one-erp.jar`, then starts the desktop app with `javaw`.
 
 Maintenance command-line startup:
 
@@ -84,7 +78,6 @@ logs/YYYYMMDD/
 
 Useful files:
 
-- `logs/YYYYMMDD/startup-YYYYMMDD-HHMMSS.log`: hidden launcher compile/startup output
 - `logs/YYYYMMDD/app-YYYYMMDD-HHMMSS-SSS-PID.log`: application events, sign-in flow, database query errors, uncaught exceptions
 - `logs/YYYYMMDD/console-YYYYMMDD-HHMMSS-SSS-PID.log`: redirected standard output/error from `javaw`
 
@@ -173,7 +166,7 @@ Runtime dependencies are managed by Maven:
 pom.xml
 ```
 
-Jar files in `lib/`, build outputs in `build/`, and Maven outputs in `target/` are ignored by Git. After cloning, install JDK and Maven, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
+Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored by Git. After cloning, install JDK and Maven, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
 
 ## Modules
 
@@ -194,6 +187,6 @@ Jar files in `lib/`, build outputs in `build/`, and Maven outputs in `target/` a
 - `last_login_at` is updated after a successful database login.
 - `config/db.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
-- `LinovaOneERP.vbs` builds with Maven in the background and starts the login window with `javaw`, so no command window is shown for daily desktop use.
-- `run.bat` delegates normal startup to the VBS launcher when possible; `--compile-only` and `--init-db` still show command-line output for maintenance.
+- `LinovaOneERP.exe` starts `run.bat` hidden, so no command window is shown for daily desktop use.
+- `run.bat` builds with Maven, starts the app, and still supports `--compile-only`, `--init-db`, and `--diagnose-login` for maintenance.
 - The application uses a custom Linova ERP icon drawn in Java, so title bars no longer use the default Java icon.

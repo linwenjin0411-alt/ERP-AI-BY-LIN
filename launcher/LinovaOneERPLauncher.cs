@@ -18,28 +18,32 @@ public static class LinovaOneERPLauncher
                 rootDir = Environment.CurrentDirectory;
             }
 
-            string scriptPath = Path.Combine(rootDir, "LinovaOneERP.vbs");
-            if (!File.Exists(scriptPath))
+            string batchPath = Path.Combine(rootDir, "run.bat");
+            if (!File.Exists(batchPath))
             {
                 MessageBox.Show(
-                    "LinovaOneERP.vbs was not found beside the launcher.",
+                    "run.bat was not found beside the launcher.",
                     "Linova One ERP",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return 1;
             }
 
-            string wscriptPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.System),
-                "wscript.exe");
-            if (!File.Exists(wscriptPath))
+            string commandProcessor = Environment.GetEnvironmentVariable("ComSpec");
+            if (String.IsNullOrEmpty(commandProcessor) || !File.Exists(commandProcessor))
             {
-                wscriptPath = "wscript.exe";
+                commandProcessor = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.System),
+                    "cmd.exe");
+            }
+            if (!File.Exists(commandProcessor))
+            {
+                commandProcessor = "cmd.exe";
             }
 
             ProcessStartInfo startInfo = new ProcessStartInfo();
-            startInfo.FileName = wscriptPath;
-            startInfo.Arguments = "//nologo " + Quote(scriptPath) + BuildArgumentTail(args);
+            startInfo.FileName = commandProcessor;
+            startInfo.Arguments = "/d /s /c " + BuildCmdCommand(batchPath, args);
             startInfo.WorkingDirectory = rootDir;
             startInfo.UseShellExecute = false;
             startInfo.CreateNoWindow = true;
@@ -56,6 +60,11 @@ public static class LinovaOneERPLauncher
                 MessageBoxIcon.Error);
             return 1;
         }
+    }
+
+    private static string BuildCmdCommand(string batchPath, string[] args)
+    {
+        return "\"\"" + EscapeCmdValue(batchPath) + "\"" + BuildArgumentTail(args) + "\"";
     }
 
     private static string BuildArgumentTail(string[] args)
@@ -75,6 +84,11 @@ public static class LinovaOneERPLauncher
 
     private static string Quote(string value)
     {
-        return "\"" + value.Replace("\"", "\\\"") + "\"";
+        return "\"" + EscapeCmdValue(value) + "\"";
+    }
+
+    private static string EscapeCmdValue(string value)
+    {
+        return value.Replace("\"", "\"\"");
     }
 }
