@@ -1,0 +1,16 @@
+build/
+*.class
+config/db.properties
+config/*.local.properties
+lib/*.jar
+logs/
+exports/
+database/*.dump
+database/*.dump.sql
+database/*.sql.gz
+database/*.backup.sql
+database/*.local.sql
+database/*.data.sql
+*.sqlite
+*.sqlite3
+*.db
