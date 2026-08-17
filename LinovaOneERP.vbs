@@ -1,36 +1,41 @@
 Option Explicit
 
-Dim shell, fso, rootDir, buildDir, classesDir, sourceRoot, sourcesFile, logsRootDir, logsDir, logFile
-Dim libDir, flatlafVersion, flatlafJar
+Dim shell, fso, rootDir, buildDir, mavenRepo, logsRootDir, logsDir, logFile, appJar
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
 rootDir = fso.GetParentFolderName(WScript.ScriptFullName)
 buildDir = fso.BuildPath(rootDir, "build")
-classesDir = fso.BuildPath(buildDir, "classes")
-sourceRoot = fso.BuildPath(rootDir, "src\main\java")
-sourcesFile = fso.BuildPath(buildDir, "sources.txt")
+mavenRepo = fso.BuildPath(buildDir, "maven-repository")
 logsRootDir = fso.BuildPath(rootDir, "logs")
 logsDir = fso.BuildPath(logsRootDir, DateStamp())
 logFile = fso.BuildPath(logsDir, "startup-" & Timestamp() & ".log")
-libDir = fso.BuildPath(rootDir, "lib")
-flatlafVersion = "3.7.1"
-flatlafJar = fso.BuildPath(libDir, "flatlaf-" & flatlafVersion & ".jar")
+appJar = fso.BuildPath(rootDir, "target\linova-one-erp.jar")
 
 shell.CurrentDirectory = rootDir
 EnsureFolder buildDir
-EnsureFolder classesDir
 EnsureFolder logsRootDir
 EnsureFolder logsDir
-WriteSourceList sourceRoot, sourcesFile
 
-Dim compileCommand, compileExitCode
-compileCommand = "cmd /c chcp 65001 >nul & javac -encoding UTF-8 -cp " & Q(fso.BuildPath(libDir, "*")) & " -d " & Q(classesDir) & " @" & Q(sourcesFile) & " > " & Q(logFile) & " 2>&1"
-compileExitCode = shell.Run(compileCommand, 0, True)
+If Not CommandExists("mvn") Then
+    AppendLog "[ERROR] Apache Maven was not found in PATH."
+    Notify "Apache Maven was not found. Install Maven 3.8 or newer, then start Linova One ERP again."
+    WScript.Quit 1
+End If
 
-If compileExitCode <> 0 Then
-    Notify "Linova One ERP failed to compile. See: " & logFile
-    WScript.Quit compileExitCode
+Dim buildCommand, buildExitCode
+buildCommand = "cmd /c chcp 65001 >nul & mvn -q -DskipTests " & Q("-Dmaven.repo.local=" & mavenRepo) & " package > " & Q(logFile) & " 2>&1"
+buildExitCode = shell.Run(buildCommand, 0, True)
+
+If buildExitCode <> 0 Then
+    Notify "Linova One ERP failed to build with Maven. See: " & logFile
+    WScript.Quit buildExitCode
+End If
+
+If Not fso.FileExists(appJar) Then
+    AppendLog "[ERROR] Built application jar was not found: " & appJar
+    Notify "Linova One ERP build finished, but the application jar was not found. See: " & logFile
+    WScript.Quit 1
 End If
 
 If HasArgument("--compile-only") Then
@@ -38,11 +43,8 @@ If HasArgument("--compile-only") Then
     WScript.Quit 0
 End If
 
-EnsureFlatLaf
-
-Dim classPath, runCommand
-classPath = classesDir & ";" & fso.BuildPath(rootDir, "lib\*")
-runCommand = "javaw -cp " & Q(classPath) & " com.lin.erp.ErpApp"
+Dim runCommand
+runCommand = "javaw -jar " & Q(appJar)
 
 On Error Resume Next
 shell.Run runCommand, 0, False
@@ -58,48 +60,6 @@ Sub EnsureFolder(path)
     End If
 End Sub
 
-Sub WriteSourceList(folderPath, outputPath)
-    Dim output
-    Set output = fso.OpenTextFile(outputPath, 2, True, False)
-    If fso.FolderExists(folderPath) Then
-        AppendJavaFiles fso.GetFolder(folderPath), output
-    End If
-    output.Close
-End Sub
-
-Sub AppendJavaFiles(folder, output)
-    Dim file, child
-    For Each file In folder.Files
-        If LCase(fso.GetExtensionName(file.Name)) = "java" Then
-            output.WriteLine Q(Replace(file.Path, "\", "/"))
-        End If
-    Next
-    For Each child In folder.SubFolders
-        AppendJavaFiles child, output
-    Next
-End Sub
-
-Sub EnsureFlatLaf()
-    If fso.FileExists(flatlafJar) Then
-        Exit Sub
-    End If
-
-    EnsureFolder libDir
-
-    Dim url, script, command, exitCode
-    url = "https://repo1.maven.org/maven2/com/formdev/flatlaf/" & flatlafVersion & "/flatlaf-" & flatlafVersion & ".jar"
-    script = "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '" & url & "' -OutFile '" & PsSingle(flatlafJar) & "'"
-    command = "powershell -NoProfile -ExecutionPolicy Bypass -Command " & Q(script)
-    AppendLog "FlatLaf jar missing. Downloading " & flatlafVersion & "."
-    exitCode = shell.Run(command, 0, True)
-
-    If exitCode <> 0 Then
-        AppendLog "[WARN] FlatLaf download failed. System look and feel will be used."
-    Else
-        AppendLog "FlatLaf downloaded: " & flatlafJar
-    End If
-End Sub
-
 Sub AppendLog(message)
     Dim output
     Set output = fso.OpenTextFile(logFile, 8, True, False)
@@ -107,8 +67,10 @@ Sub AppendLog(message)
     output.Close
 End Sub
 
-Function PsSingle(value)
-    PsSingle = Replace(value, "'", "''")
+Function CommandExists(commandName)
+    Dim exitCode
+    exitCode = shell.Run("cmd /c where " & commandName & " >nul 2>nul", 0, True)
+    CommandExists = (exitCode = 0)
 End Function
 
 Function Timestamp()

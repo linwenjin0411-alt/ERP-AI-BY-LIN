@@ -1,9 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-set "FLATLAF_VERSION=3.7.1"
-set "FLATLAF_JAR=lib\flatlaf-%FLATLAF_VERSION%.jar"
-set "FLATLAF_URL=https://repo1.maven.org/maven2/com/formdev/flatlaf/%FLATLAF_VERSION%/flatlaf-%FLATLAF_VERSION%.jar"
+set "APP_JAR=target\linova-one-erp.jar"
+set "MAVEN_REPO=build\maven-repository"
 
 if "%~1"=="" (
   where wscript >nul 2>nul
@@ -13,76 +12,68 @@ if "%~1"=="" (
   )
 )
 
-where javac >nul 2>nul
-if errorlevel 1 (
-  echo [ERROR] Java JDK was not found.
-  echo Please install JDK 8 or newer and make sure javac is available in PATH.
-  pause
-  exit /b 1
-)
+call :build_app
+if errorlevel 1 exit /b 1
 
-if not exist build\classes mkdir build\classes
-if exist build\sources.txt del build\sources.txt
-
-for /r src\main\java %%f in (*.java) do echo %%f>>build\sources.txt
-
-echo Compiling Linova One ERP...
-javac -encoding UTF-8 -cp "lib\*" -d build\classes @build\sources.txt
-if errorlevel 1 (
-  echo.
-  echo [ERROR] Compile failed.
-  pause
-  exit /b 1
-)
-
-if "%~1"=="--compile-only" (
+if /i "%~1"=="--compile-only" (
   echo Compile finished.
   exit /b 0
 )
 
-if "%~1"=="--init-db" (
+if /i "%~1"=="--init-db" (
   echo Initializing Linova One ERP database...
-  java -cp "build\classes;lib\*" com.lin.erp.db.DatabaseSetup
+  java -cp "%APP_JAR%" com.lin.erp.db.DatabaseSetup
   if errorlevel 1 (
     echo.
     echo [ERROR] Database initialization failed.
-    pause
     exit /b 1
   )
   echo Database initialization finished.
   exit /b 0
 )
 
-if "%~1"=="--diagnose-login" (
+if /i "%~1"=="--diagnose-login" (
   echo Diagnosing Linova One ERP login...
   if "%~2"=="" (
-    java -cp "build\classes;lib\*" com.lin.erp.Diagnostics --login admin admin123
+    java -cp "%APP_JAR%" com.lin.erp.Diagnostics --login admin admin123
   ) else (
-    java -cp "build\classes;lib\*" com.lin.erp.Diagnostics --login %2 %3
+    java -cp "%APP_JAR%" com.lin.erp.Diagnostics --login "%~2" "%~3"
   )
   if errorlevel 1 exit /b 1
   exit /b 0
 )
 
-if "%~1"=="" call :ensure_flatlaf
-
 echo Starting Linova One ERP...
 where javaw >nul 2>nul
 if errorlevel 1 (
-  java -cp "build\classes;lib\*" com.lin.erp.ErpApp
+  java -jar "%APP_JAR%"
 ) else (
-  start "" javaw -cp "build\classes;lib\*" com.lin.erp.ErpApp
+  start "" javaw -jar "%APP_JAR%"
 )
 
 endlocal
 exit /b 0
 
-:ensure_flatlaf
-if exist "%FLATLAF_JAR%" exit /b 0
-if not exist lib mkdir lib
-echo Downloading FlatLaf %FLATLAF_VERSION%...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%FLATLAF_URL%' -OutFile '%FLATLAF_JAR%'"
+:build_app
+where mvn >nul 2>nul
 if errorlevel 1 (
-  echo [WARN] FlatLaf could not be downloaded. The system look and feel will be used.
+  echo [ERROR] Apache Maven was not found.
+  echo Install Maven 3.8 or newer, then run this command again.
+  echo Maven downloads FlatLaf and MySQL Connector/J automatically; jar files are not committed.
+  exit /b 1
+)
+
+echo Building Linova One ERP with Maven...
+if not exist build mkdir build
+call mvn -q -DskipTests "-Dmaven.repo.local=%MAVEN_REPO%" package
+if errorlevel 1 (
+  echo.
+  echo [ERROR] Maven build failed.
+  exit /b 1
+)
+
+if not exist "%APP_JAR%" (
+  echo [ERROR] Built application jar was not found: %APP_JAR%
+  exit /b 1
 )
 exit /b 0

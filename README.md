@@ -19,7 +19,14 @@ The name keeps `Lin` as the project identity, uses `nova` for a clean innovation
 
 ## Run
 
-Install JDK 8 or newer.
+Install JDK 8 or newer and Apache Maven 3.8 or newer.
+
+On the first run, Maven downloads the open-source dependencies declared in `pom.xml`:
+
+- FlatLaf
+- MySQL Connector/J
+
+Generated files under `target/` and `build/` are ignored by Git and can be recreated at any time.
 
 Silent desktop startup:
 
@@ -34,6 +41,8 @@ Double-click LinovaOneERP.vbs
 ```
 
 Daily desktop use should start from `LinovaOneERP.exe`. It launches the hidden VBS desktop starter without opening a command window. `run.bat` is kept mainly for maintenance commands.
+
+When `LinovaOneERP.exe` or `LinovaOneERP.vbs` is opened, the launcher runs Maven in the background, builds `target/linova-one-erp.jar`, then starts the desktop app with `javaw`.
 
 Maintenance command-line startup:
 
@@ -85,7 +94,7 @@ User operations are written in English with the `>>> USER_ACTION` prefix, includ
 
 ## Desktop UI
 
-The application uses Swing with FlatLaf when `lib/flatlaf-3.7.1.jar` is present. `run.bat` and `LinovaOneERP.vbs` try to download it automatically from Maven Central for daily startup. If the download is unavailable, the app still opens with the system look and feel.
+The application uses Swing with FlatLaf. Dependencies are resolved by Maven from `pom.xml`; jar files are not committed.
 
 Normal messages, such as sign-in success or operation completion, appear as small toast windows and close after 3 seconds. Error messages use blocking alert dialogs and stay open until confirmed.
 
@@ -156,15 +165,15 @@ Password: plan123
 Role: Production Planner
 ```
 
-## JDBC Driver
+## Dependencies
 
-The local runtime uses MySQL Connector/J from:
+Runtime dependencies are managed by Maven:
 
 ```text
-lib/mysql-connector-j-8.4.0.jar
+pom.xml
 ```
 
-Jar files in `lib` are ignored by Git. Keep the jar locally when running with MySQL.
+Jar files in `lib/`, build outputs in `build/`, and Maven outputs in `target/` are ignored by Git. After cloning, install JDK and Maven, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
 
 ## Modules
 
@@ -183,8 +192,8 @@ Jar files in `lib` are ignored by Git. Keep the jar locally when running with My
 - The left navigation uses a custom Swing button style so the dark ERP menu is not overridden by the Windows native button theme.
 - User authentication now queries MySQL first.
 - `last_login_at` is updated after a successful database login.
-- `config/db.properties` and JDBC jar files are intentionally not committed.
+- `config/db.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
-- `LinovaOneERP.vbs` compiles in the background and starts the login window with `javaw`, so no command window is shown for daily desktop use.
+- `LinovaOneERP.vbs` builds with Maven in the background and starts the login window with `javaw`, so no command window is shown for daily desktop use.
 - `run.bat` delegates normal startup to the VBS launcher when possible; `--compile-only` and `--init-db` still show command-line output for maintenance.
 - The application uses a custom Linova ERP icon drawn in Java, so title bars no longer use the default Java icon.

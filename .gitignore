@@ -1,5 +1,8 @@
 build/
+target/
+dependency-reduced-pom.xml
 *.class
+*.jar
 config/db.properties
 config/*.local.properties
 lib/*.jar
