@@ -1,3 +1,6 @@
+# Contact
+`linwenjin0411@gmail.com
+
 # Linova One ERP
 
 `Linova One ERP` is a Java PC desktop ERP prototype for manufacturing companies.
