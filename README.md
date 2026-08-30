@@ -1,5 +1,5 @@
 # Contact
-`linwenjin0411@gmail.com
+- linwenjin0411@gmail.com
 
 # Linova One ERP
 
