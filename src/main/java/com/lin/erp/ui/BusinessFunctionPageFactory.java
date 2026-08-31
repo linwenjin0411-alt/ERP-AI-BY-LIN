@@ -72,6 +72,21 @@ public final class BusinessFunctionPageFactory {
         if ("INVENTORY_COUNT".equals(code)) {
             return new CycleCountPanel(owner, session, function);
         }
+        if ("MANUFACTURING_ORDER".equals(code)) {
+            return new ProductionOrderEntryPanel(owner, session, function);
+        }
+        if ("MANUFACTURING_ORDER_QUERY".equals(code)) {
+            return new ProductionOrderQueryPanel(owner, session, function);
+        }
+        if ("MANUFACTURING_ISSUE".equals(code)) {
+            return new MaterialIssuePanel(owner, session, function);
+        }
+        if ("MANUFACTURING_COMPLETE".equals(code)) {
+            return new ProductionCompletionPanel(owner, session, function);
+        }
+        if ("MANUFACTURING_RETURN".equals(code)) {
+            return new MaterialReturnPanel(owner, session, function);
+        }
         return new BusinessFunctionPanel(owner, session, function);
     }
 }
