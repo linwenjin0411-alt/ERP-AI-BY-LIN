@@ -49,7 +49,8 @@ public class BusinessFunctionPanel extends JPanel {
     private final Window owner;
     private final UserSession session;
     private final MenuNode function;
-    private final JTextField[] fields = new JTextField[9];
+    private final BusinessFunctionDefinition definition;
+    private JTextField[] fields;
     private final JRadioButton[] modeButtons = new JRadioButton[4];
     private JTable table;
     private DefaultTableModel tableModel;
@@ -61,6 +62,8 @@ public class BusinessFunctionPanel extends JPanel {
         this.owner = owner;
         this.session = session;
         this.function = function;
+        this.definition = BusinessFunctionCatalog.forFunction(function);
+        this.fields = new JTextField[definition.getFieldKeys().length];
         setOpaque(false);
         add(createOperationStrip(), BorderLayout.NORTH);
         add(createBody(), BorderLayout.CENTER);
@@ -156,16 +159,8 @@ public class BusinessFunctionPanel extends JPanel {
         JPanel form = new JPanel(new GridBagLayout());
         form.setOpaque(false);
         form.setBorder(AppTheme.emptyBorder(14, 0, 2, 0));
-        String[] labelKeys = {
-                "function.field.documentNo", "function.field.businessDate", "function.field.status",
-                "function.field.partner", "function.field.item", "function.field.quantity",
-                "function.field.warehouse", "function.field.owner", "function.field.memo"
-        };
-        String[] values = {
-                defaultDocumentNumber(), "2026/08/17", text("status.open"),
-                defaultPartner(), defaultItem(), defaultQuantity(),
-                "JP01", text(session.getDisplayNameKey()), text(function.getNameKey())
-        };
+        String[] labelKeys = definition.getFieldKeys();
+        String[] values = definition.getDefaultValues();
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 6, 7, 6);
@@ -189,14 +184,8 @@ public class BusinessFunctionPanel extends JPanel {
     }
 
     private JScrollPane createLineTable() {
-        String[] columns = {
-                t("function.table.line"),
-                t("column.item"),
-                t("column.qty"),
-                t("column.status"),
-                t("column.next")
-        };
-        tableModel = new DefaultTableModel(sampleRows(), columns) {
+        String[] columns = localized(definition.getTableColumnKeys());
+        tableModel = new DefaultTableModel(localizedRows(definition.getTableRows()), columns) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -311,8 +300,8 @@ public class BusinessFunctionPanel extends JPanel {
         if (MODE_REGISTER.equals(actionKey)) {
             tableModel.addRow(new String[]{
                     String.valueOf(tableModel.getRowCount() + 1),
-                    fields[4].getText(),
-                    fields[5].getText(),
+                    valueAt(4),
+                    valueAt(5),
                     text("status.open"),
                     text(nextStepKey())
             });
@@ -323,8 +312,8 @@ public class BusinessFunctionPanel extends JPanel {
                 AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
                 return;
             }
-            tableModel.setValueAt(fields[4].getText(), row, 1);
-            tableModel.setValueAt(fields[5].getText(), row, 2);
+            tableModel.setValueAt(valueAt(4), row, 1);
+            tableModel.setValueAt(valueAt(5), row, 2);
             tableModel.setValueAt(text("status.released"), row, 3);
             AppMessages.success(owner, t("message.edit.success"));
         } else if (MODE_CANCEL.equals(actionKey)) {
@@ -373,11 +362,21 @@ public class BusinessFunctionPanel extends JPanel {
         if (row < 0) {
             return;
         }
-        fields[0].setText(defaultDocumentNumber());
-        fields[2].setText(value(row, 3));
-        fields[4].setText(value(row, 1));
-        fields[5].setText(value(row, 2));
-        fields[8].setText(text(function.getNameKey()) + " / " + value(row, 4));
+        if (fields.length > 0) {
+            fields[0].setText(defaultDocumentNumber());
+        }
+        if (fields.length > 2 && tableModel.getColumnCount() > 3) {
+            fields[2].setText(value(row, 3));
+        }
+        if (fields.length > 4 && tableModel.getColumnCount() > 1) {
+            fields[4].setText(value(row, 1));
+        }
+        if (fields.length > 5 && tableModel.getColumnCount() > 2) {
+            fields[5].setText(value(row, 2));
+        }
+        if (fields.length > 8 && tableModel.getColumnCount() > 4) {
+            fields[8].setText(text(function.getNameKey()) + " / " + value(row, 4));
+        }
     }
 
     private int selectedModelRow() {
@@ -392,118 +391,20 @@ public class BusinessFunctionPanel extends JPanel {
         return value == null ? "" : value.toString();
     }
 
-    private String[][] sampleRows() {
-        return new String[][]{
-                {"1", defaultItem(), defaultQuantity(), text("status.open"), text(nextStepKey())},
-                {"2", "RM-1008", "420", text("status.released"), text("term.stockOverview")},
-                {"3", "PK-2210", "1,800", text("status.ready"), text("term.receipt")}
-        };
-    }
-
     private String functionContext() {
         return t("function.context.flow") + "\n"
-                + moduleFlow() + "\n\n"
+                + definition.getFlow() + "\n\n"
                 + t("function.context.upstream") + "\n"
-                + upstreamText() + "\n\n"
+                + definition.getUpstream() + "\n\n"
                 + t("function.context.downstream") + "\n"
-                + downstreamText() + "\n\n"
+                + definition.getDownstream() + "\n\n"
                 + t("form.side.audit");
-    }
-
-    private String moduleFlow() {
-        String module = function.getModuleCode();
-        if ("SALES".equals(module)) {
-            return "Customer / Item -> Sales Order -> Shipment -> Sales Confirmation -> AR -> Collection";
-        }
-        if ("PROCUREMENT".equals(module)) {
-            return "Supplier / Item -> Purchase Order -> Receipt -> Purchase Confirmation -> AP -> Payment";
-        }
-        if ("MANUFACTURING".equals(module)) {
-            return "Item / BOM -> Production Order -> Issue -> Completion -> Finished Goods Stock";
-        }
-        if ("INVENTORY".equals(module)) {
-            return "Receipt / Completion / Shipment / Issue / Transfer / Count -> Stock Ledger";
-        }
-        if ("FINANCE".equals(module)) {
-            return "Sales / Purchase Confirmation -> Receivable / Payable -> Collection / Payment";
-        }
-        if ("ADMIN".equals(module)) {
-            return "User -> Role -> Menu Permission -> Operation Log";
-        }
-        return "Master Data -> Business Transaction -> Status / Audit";
-    }
-
-    private String upstreamText() {
-        String code = function.getCode();
-        if (code.indexOf("SHIPMENT") >= 0) {
-            return "Sales order and available stock";
-        }
-        if (code.indexOf("RECEIPT") >= 0) {
-            return "Purchase order and warehouse";
-        }
-        if (code.indexOf("ISSUE") >= 0) {
-            return "Production order, BOM, and raw material stock";
-        }
-        if (code.indexOf("AR") >= 0) {
-            return "Sales confirmation and billing";
-        }
-        if (code.indexOf("AP") >= 0) {
-            return "Purchase confirmation and invoice verification";
-        }
-        return text(function.getNameKey());
-    }
-
-    private String downstreamText() {
-        String code = function.getCode();
-        if (code.indexOf("SHIPMENT") >= 0) {
-            return "Sales confirmation and accounts receivable";
-        }
-        if (code.indexOf("RECEIPT") >= 0) {
-            return "Inventory increase and purchase confirmation";
-        }
-        if (code.indexOf("ISSUE") >= 0) {
-            return "Inventory decrease and production progress";
-        }
-        if (code.indexOf("TRANSFER") >= 0 || code.indexOf("COUNT") >= 0) {
-            return "Stock ledger and current inventory";
-        }
-        if (code.indexOf("PAYMENT") >= 0) {
-            return "Payable balance reduction";
-        }
-        if (code.indexOf("COLLECTION") >= 0) {
-            return "Receivable balance reduction";
-        }
-        return "Next business page and operation audit";
     }
 
     private String defaultDocumentNumber() {
         String code = function.getCode();
         String prefix = code.length() <= 3 ? code : code.substring(0, 3);
         return prefix + "-" + new SimpleDateFormat("MMddHHmm").format(new Date());
-    }
-
-    private String defaultPartner() {
-        if ("PROCUREMENT".equals(function.getModuleCode())) {
-            return "SUP-2007";
-        }
-        if ("SALES".equals(function.getModuleCode()) || "FINANCE".equals(function.getModuleCode())) {
-            return "CUS-3001";
-        }
-        return "LINOVA-001";
-    }
-
-    private String defaultItem() {
-        if ("PROCUREMENT".equals(function.getModuleCode())) {
-            return "RM-1008";
-        }
-        return "FG-3007";
-    }
-
-    private String defaultQuantity() {
-        if ("PROCUREMENT".equals(function.getModuleCode())) {
-            return "3,000";
-        }
-        return "120";
     }
 
     private String nextStepKey() {
@@ -521,6 +422,29 @@ public class BusinessFunctionPanel extends JPanel {
             return "action.post";
         }
         return "action.details";
+    }
+
+    private String valueAt(int index) {
+        if (index >= fields.length) {
+            return "";
+        }
+        return fields[index].getText();
+    }
+
+    private String[] localized(String[] values) {
+        String[] localized = new String[values.length];
+        for (int i = 0; i < values.length; i++) {
+            localized[i] = text(values[i]);
+        }
+        return localized;
+    }
+
+    private String[][] localizedRows(String[][] rows) {
+        String[][] localized = new String[rows.length][];
+        for (int i = 0; i < rows.length; i++) {
+            localized[i] = localized(rows[i]);
+        }
+        return localized;
     }
 
     private JLabel smallLabel(String value) {
