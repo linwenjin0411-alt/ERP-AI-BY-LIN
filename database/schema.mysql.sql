@@ -144,6 +144,22 @@ create table if not exists erp_item_masters (
   updated_at timestamp not null default current_timestamp on update current_timestamp
 ) engine=InnoDB default charset=utf8mb4;
 
+create table if not exists erp_function_records (
+  id bigint primary key auto_increment,
+  function_code varchar(80) not null,
+  c1 varchar(255),
+  c2 varchar(255),
+  c3 varchar(255),
+  c4 varchar(255),
+  c5 varchar(255),
+  c6 varchar(255),
+  c7 varchar(255),
+  c8 varchar(255),
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp,
+  index idx_erp_function_records_code (function_code)
+) engine=InnoDB default charset=utf8mb4;
+
 insert into erp_companies (code, name, active) values
 ('LINOVA', 'Linova Smart Manufacturing Ltd.', 1)
 on duplicate key update name = values(name), active = values(active);

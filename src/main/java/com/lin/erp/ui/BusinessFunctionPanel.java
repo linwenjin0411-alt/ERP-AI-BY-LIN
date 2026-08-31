@@ -1,6 +1,9 @@
 package com.lin.erp.ui;
 
 import com.lin.erp.auth.UserSession;
+import com.lin.erp.config.DbConfig;
+import com.lin.erp.db.DbFunctionRecordRepository;
+import com.lin.erp.db.FunctionRecord;
 import com.lin.erp.db.MenuNode;
 import com.lin.erp.i18n.I18n;
 import com.lin.erp.i18n.Language;
@@ -37,8 +40,11 @@ import java.awt.Insets;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.sql.SQLException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 public class BusinessFunctionPanel extends JPanel {
     private static final String MODE_REGISTER = "function.mode.register";
@@ -50,6 +56,8 @@ public class BusinessFunctionPanel extends JPanel {
     private final UserSession session;
     private final MenuNode function;
     private final BusinessFunctionDefinition definition;
+    private final DbFunctionRecordRepository repository;
+    private final List<FunctionRecord> records = new ArrayList<FunctionRecord>();
     private JTextField[] fields;
     private final JRadioButton[] modeButtons = new JRadioButton[4];
     private JTable table;
@@ -63,10 +71,12 @@ public class BusinessFunctionPanel extends JPanel {
         this.session = session;
         this.function = function;
         this.definition = BusinessFunctionCatalog.forFunction(function);
+        this.repository = new DbFunctionRecordRepository(DbConfig.loadDefault());
         this.fields = new JTextField[definition.getFieldKeys().length];
         setOpaque(false);
         add(createOperationStrip(), BorderLayout.NORTH);
         add(createBody(), BorderLayout.CENTER);
+        reload();
         logAction("GENERIC_FUNCTION_OPEN", "function=" + function.getCode());
     }
 
@@ -175,7 +185,7 @@ public class BusinessFunctionPanel extends JPanel {
 
             gbc.gridx = column * 2 + 1;
             gbc.weightx = 1;
-            fields[i] = new JTextField(values[i]);
+            fields[i] = new JTextField(i < values.length ? text(values[i]) : "");
             fields[i].setPreferredSize(new Dimension(178, 34));
             styleCompactField(fields[i]);
             form.add(fields[i], gbc);
@@ -185,7 +195,7 @@ public class BusinessFunctionPanel extends JPanel {
 
     private JScrollPane createLineTable() {
         String[] columns = localized(definition.getTableColumnKeys());
-        tableModel = new DefaultTableModel(localizedRows(definition.getTableRows()), columns) {
+        tableModel = new DefaultTableModel(new String[0][0], columns) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -298,37 +308,69 @@ public class BusinessFunctionPanel extends JPanel {
     private void runAction(String actionKey) {
         selectMode(actionKey);
         if (MODE_REGISTER.equals(actionKey)) {
-            tableModel.addRow(new String[]{
-                    String.valueOf(tableModel.getRowCount() + 1),
-                    valueAt(4),
-                    valueAt(5),
-                    text("status.open"),
-                    text(nextStepKey())
-            });
-            AppMessages.success(owner, t("message.create.success"));
+            createRecord();
         } else if (MODE_CORRECT.equals(actionKey)) {
-            int row = selectedModelRow();
-            if (row < 0) {
-                AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
-                return;
-            }
-            tableModel.setValueAt(valueAt(4), row, 1);
-            tableModel.setValueAt(valueAt(5), row, 2);
-            tableModel.setValueAt(text("status.released"), row, 3);
-            AppMessages.success(owner, t("message.edit.success"));
+            updateRecord("status.released", t("message.edit.success"));
         } else if (MODE_CANCEL.equals(actionKey)) {
-            int row = selectedModelRow();
-            if (row < 0) {
-                AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
-                return;
-            }
-            tableModel.setValueAt(text("status.cancelled"), row, 3);
-            AppMessages.success(owner, t("message.operation.success"));
+            updateRecord("status.cancelled", t("message.operation.success"));
         } else {
             loadSelectedRowIntoForm();
             AppMessages.info(owner, t("message.refresh.done"));
         }
         logAction("GENERIC_FUNCTION_ACTION", "function=" + function.getCode() + " | action=" + actionKey);
+    }
+
+    private void createRecord() {
+        try {
+            repository.createRecord(function.getCode(), newDisplayValues("status.open"));
+            reload();
+            AppMessages.success(owner, t("message.create.success"));
+        } catch (SQLException e) {
+            AppLogger.error("Function record create failed.", e);
+            AppMessages.error(owner, t("message.error.title"), t("message.save.failed"));
+        }
+    }
+
+    private void updateRecord(String status, String successMessage) {
+        int row = selectedModelRow();
+        if (row < 0) {
+            AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
+            return;
+        }
+        try {
+            FunctionRecord record = records.get(row);
+            repository.updateRecord(record.getId(), newDisplayValues(status));
+            reload();
+            AppMessages.success(owner, successMessage);
+        } catch (SQLException e) {
+            AppLogger.error("Function record update failed.", e);
+            AppMessages.error(owner, t("message.error.title"), t("message.save.failed"));
+        }
+    }
+
+    private void reload() {
+        try {
+            records.clear();
+            records.addAll(repository.loadRecords(function.getCode(), definition.getTableRows()));
+            rebuildTable();
+        } catch (SQLException e) {
+            AppLogger.error("Function record load failed.", e);
+            records.clear();
+            String[][] seedRows = definition.getTableRows();
+            for (int i = 0; i < seedRows.length; i++) {
+                records.add(new FunctionRecord(-1, function.getCode(), seedRows[i]));
+            }
+            rebuildTable();
+            AppMessages.error(owner, t("message.error.title"), t("message.refresh.failed"));
+        }
+    }
+
+    private void rebuildTable() {
+        String[][] rows = new String[records.size()][];
+        for (int i = 0; i < records.size(); i++) {
+            rows[i] = localized(records.get(i).getValues());
+        }
+        tableModel.setDataVector(rows, localized(definition.getTableColumnKeys()));
     }
 
     private void filterRows() {
@@ -377,6 +419,52 @@ public class BusinessFunctionPanel extends JPanel {
         if (fields.length > 8 && tableModel.getColumnCount() > 4) {
             fields[8].setText(text(function.getNameKey()) + " / " + value(row, 4));
         }
+    }
+
+    private String[] newDisplayValues(String status) {
+        String[] columns = definition.getTableColumnKeys();
+        String[] values = new String[Math.min(8, columns.length)];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = valueForColumn(columns[i], i, status);
+        }
+        return values;
+    }
+
+    private String valueForColumn(String columnKey, int index, String status) {
+        if ("function.table.line".equals(columnKey)) {
+            return String.valueOf(records.size() + 1);
+        }
+        if ("column.id".equals(columnKey)) {
+            return valueAt(0);
+        }
+        if ("column.date".equals(columnKey) || "column.due".equals(columnKey)) {
+            return valueAt(1);
+        }
+        if ("column.status".equals(columnKey)) {
+            return status;
+        }
+        if ("column.customer".equals(columnKey) || "column.supplier".equals(columnKey) || "column.name".equals(columnKey)) {
+            return valueAt(3);
+        }
+        if ("column.item".equals(columnKey) || "column.type".equals(columnKey)) {
+            return valueAt(4);
+        }
+        if ("column.qty".equals(columnKey) || "column.amount".equals(columnKey)) {
+            return valueAt(5);
+        }
+        if ("column.warehouse".equals(columnKey) || "column.plant".equals(columnKey)) {
+            return valueAt(6);
+        }
+        if ("column.owner".equals(columnKey)) {
+            return valueAt(7);
+        }
+        if ("column.risk".equals(columnKey)) {
+            return "risk.low";
+        }
+        if ("column.next".equals(columnKey)) {
+            return nextStepKey();
+        }
+        return index < definition.getDefaultValues().length ? definition.getDefaultValues()[index] : "";
     }
 
     private int selectedModelRow() {
