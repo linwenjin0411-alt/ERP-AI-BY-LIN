@@ -787,7 +787,7 @@ public class MainFrame extends JFrame {
         if ("MASTER_ITEM".equals(function.getCode())) {
             body.add(new ItemMasterPanel(window, session, itemMasterRepository), BorderLayout.CENTER);
         } else {
-            body.add(createTransactionFunctionPanel(window, function), BorderLayout.CENTER);
+            body.add(new BusinessFunctionPanel(window, session, function), BorderLayout.CENTER);
         }
         root.add(body, BorderLayout.CENTER);
 

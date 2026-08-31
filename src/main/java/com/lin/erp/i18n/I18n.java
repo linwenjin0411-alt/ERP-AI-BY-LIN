@@ -109,6 +109,9 @@ public final class I18n {
         put("function.field.owner", "Owner", "负责人", "担当者");
         put("function.field.memo", "Memo", "备注", "メモ");
         put("function.table.line", "Line", "行号", "行");
+        put("function.context.flow", "Business flow", "业务流程", "業務フロー");
+        put("function.context.upstream", "Upstream", "上游", "上流");
+        put("function.context.downstream", "Downstream", "下游", "下流");
         put("item.count.prefix", "Records: ", "记录数：", "件数: ");
         put("item.side.title", "Item signals", "品目信号", "品目シグナル");
         put("item.side.total", "Total items", "全部品目", "全品目");
@@ -322,6 +325,7 @@ public final class I18n {
         put("status.ready", "Ready", "就绪", "準備完了");
         put("status.posted", "Posted", "已过账", "転記済");
         put("status.draft", "Draft", "草稿", "ドラフト");
+        put("status.cancelled", "Cancelled", "已取消", "取消済");
         put("risk.high", "High", "高", "高");
         put("risk.medium", "Medium", "中", "中");
         put("risk.low", "Low", "低", "低");
