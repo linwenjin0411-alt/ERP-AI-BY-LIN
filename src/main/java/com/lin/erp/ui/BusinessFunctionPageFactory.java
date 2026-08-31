@@ -24,6 +24,24 @@ public final class BusinessFunctionPageFactory {
         if ("MASTER_WAREHOUSE".equals(code)) {
             return new WarehouseManagementPanel(owner, session, function);
         }
+        if ("SALES_ORDER".equals(code)) {
+            return new SalesOrderEntryPanel(owner, session, function);
+        }
+        if ("SALES_ORDER_QUERY".equals(code)) {
+            return new SalesOrderQueryPanel(owner, session, function);
+        }
+        if ("SALES_SHIPMENT".equals(code)) {
+            return new ShipmentEntryPanel(owner, session, function);
+        }
+        if ("SALES_SHIPMENT_QUERY".equals(code)) {
+            return new ShipmentQueryPanel(owner, session, function);
+        }
+        if ("SALES_CONFIRMATION".equals(code)) {
+            return new SalesConfirmationPanel(owner, session, function);
+        }
+        if ("SALES_RETURN".equals(code)) {
+            return new SalesReturnPanel(owner, session, function);
+        }
         return new BusinessFunctionPanel(owner, session, function);
     }
 }
