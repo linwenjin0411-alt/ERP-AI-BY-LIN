@@ -42,6 +42,24 @@ public final class BusinessFunctionPageFactory {
         if ("SALES_RETURN".equals(code)) {
             return new SalesReturnPanel(owner, session, function);
         }
+        if ("PROCUREMENT_PO".equals(code)) {
+            return new PurchaseOrderEntryPanel(owner, session, function);
+        }
+        if ("PROCUREMENT_PO_QUERY".equals(code)) {
+            return new PurchaseOrderQueryPanel(owner, session, function);
+        }
+        if ("PROCUREMENT_RECEIPT".equals(code)) {
+            return new GoodsReceiptEntryPanel(owner, session, function);
+        }
+        if ("PROCUREMENT_RECEIPT_QUERY".equals(code)) {
+            return new GoodsReceiptQueryPanel(owner, session, function);
+        }
+        if ("PROCUREMENT_CONFIRMATION".equals(code)) {
+            return new PurchaseConfirmationPanel(owner, session, function);
+        }
+        if ("PROCUREMENT_RETURN".equals(code)) {
+            return new PurchaseReturnPanel(owner, session, function);
+        }
         return new BusinessFunctionPanel(owner, session, function);
     }
 }
