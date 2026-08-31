@@ -60,6 +60,18 @@ public final class BusinessFunctionPageFactory {
         if ("PROCUREMENT_RETURN".equals(code)) {
             return new PurchaseReturnPanel(owner, session, function);
         }
+        if ("INVENTORY_STOCK".equals(code)) {
+            return new StockOverviewPanel(owner, session, function);
+        }
+        if ("INVENTORY_LEDGER".equals(code)) {
+            return new StockLedgerQueryPanel(owner, session, function);
+        }
+        if ("INVENTORY_TRANSFER".equals(code)) {
+            return new StockTransferPanel(owner, session, function);
+        }
+        if ("INVENTORY_COUNT".equals(code)) {
+            return new CycleCountPanel(owner, session, function);
+        }
         return new BusinessFunctionPanel(owner, session, function);
     }
 }
