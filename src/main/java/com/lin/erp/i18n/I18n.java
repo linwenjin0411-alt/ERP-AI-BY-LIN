@@ -153,6 +153,7 @@ public final class I18n {
         put("module.inventory", "Inventory", "库存管理", "在庫管理");
         put("module.manufacturing", "Manufacturing", "生产管理", "生産管理");
         put("module.finance", "Finance", "财务联动", "会計連携");
+        put("module.reports", "Reports", "基础报表", "基本レポート");
         put("module.ai", "AI Assistant", "AI 业务助手", "AI 業務アシスタント");
         put("module.admin", "Administration", "系统管理", "システム管理");
 
@@ -221,26 +222,47 @@ public final class I18n {
         put("menu.master.changeAudit", "Master Change Audit", "主数据变更审计", "マスタ変更監査");
         put("menu.procurement.pr", "Purchase Request", "采购申请", "購買依頼");
         put("menu.procurement.po", "Purchase Order", "采购订单", "購買発注");
+        put("menu.procurement.poQuery", "Purchase Order Query", "采购订单查询", "購買発注照会");
         put("menu.procurement.receipt", "Goods Receipt", "收货入库", "入荷");
+        put("menu.procurement.receiptQuery", "Receipt Query", "收货查询", "入荷照会");
+        put("menu.procurement.confirmation", "Purchase Confirmation", "采购确认", "仕入確認");
         put("menu.procurement.invoice", "Invoice Verification", "发票校验", "請求書照合");
+        put("menu.procurement.return", "Purchase Return", "采购退货", "仕入返品");
         put("menu.sales.quotation", "Quotation", "报价", "見積");
         put("menu.sales.order", "Sales Order", "销售订单", "販売受注");
+        put("menu.sales.orderQuery", "Sales Order Query", "销售订单查询", "販売受注照会");
         put("menu.sales.shipment", "Shipment", "出货", "出荷");
+        put("menu.sales.shipmentQuery", "Shipment Query", "出货查询", "出荷照会");
+        put("menu.sales.confirmation", "Sales Confirmation", "销售确认", "売上確認");
         put("menu.sales.billing", "Billing", "开票", "請求");
+        put("menu.sales.return", "Sales Return", "销售退货", "売上返品");
         put("menu.sales.exportOrder", "Export Order", "出口订单", "輸出受注");
         put("menu.sales.approvalReview", "Approval Review", "审批复核", "承認確認");
         put("menu.inventory.stock", "Stock Overview", "库存总览", "在庫照会");
+        put("menu.inventory.ledger", "Stock Ledger Query", "库存流水查询", "在庫元帳照会");
         put("menu.inventory.lot", "Lot Trace", "批次追溯", "ロット追跡");
         put("menu.inventory.transfer", "Stock Transfer", "库存调拨", "在庫振替");
         put("menu.inventory.count", "Cycle Count", "循环盘点", "循環棚卸");
         put("menu.manufacturing.mrp", "MRP Run", "MRP 运算", "MRP実行");
         put("menu.manufacturing.order", "Production Order", "生产订单", "製造指図");
+        put("menu.manufacturing.orderQuery", "Production Order Query", "生产订单查询", "製造指図照会");
         put("menu.manufacturing.issue", "Material Issue", "生产领料", "材料払出");
+        put("menu.manufacturing.complete", "Production Completion", "生产完工登记", "製造完了登録");
+        put("menu.manufacturing.return", "Material Return", "生产退料", "材料戻入");
         put("menu.manufacturing.cost", "Cost Collection", "成本归集", "原価集計");
         put("menu.finance.ar", "Accounts Receivable", "应收账款", "売掛金");
+        put("menu.finance.collection", "Collection Register", "收款登记", "入金登録");
+        put("menu.finance.collectionQuery", "Collection Query", "收款查询", "入金照会");
         put("menu.finance.ap", "Accounts Payable", "应付账款", "買掛金");
+        put("menu.finance.payment", "Payment Register", "付款登记", "支払登録");
+        put("menu.finance.paymentQuery", "Payment Query", "付款查询", "支払照会");
         put("menu.finance.gl", "General Ledger", "总账", "総勘定元帳");
         put("menu.finance.close", "Period Close", "期间结账", "期間締め");
+        put("menu.report.salesDetail", "Sales Detail", "销售明细", "売上明細");
+        put("menu.report.purchaseDetail", "Purchase Detail", "采购明细", "購買明細");
+        put("menu.report.inventoryDetail", "Inventory Detail", "库存明细", "在庫明細");
+        put("menu.report.arBalance", "AR Balance", "应收余额", "売掛残高");
+        put("menu.report.apBalance", "AP Balance", "应付余额", "買掛残高");
         put("menu.ai.query", "Natural Query", "自然语言查询", "自然言語検索");
         put("menu.ai.explain", "Exception Explanation", "异常解释", "例外説明");
         put("menu.ai.summary", "Report Summary", "报表总结", "レポート要約");
@@ -286,6 +308,9 @@ public final class I18n {
         put("finance.subtitle", "Financial integration for AR, AP, inventory valuation, cost accounting, and GL posting.",
                 "应收、应付、库存估价、成本会计与总账过账的财务联动。",
                 "売掛、買掛、在庫評価、原価計算、総勘定元帳転記の会計連携。");
+        put("reports.subtitle", "Core business reports for sales, procurement, inventory, receivables, and payables.",
+                "覆盖销售、采购、库存、应收、应付的基础业务报表。",
+                "売上、購買、在庫、売掛、買掛を対象とする基本業務レポート。");
         put("ai.subtitle", "Natural-language ERP assistant for query, exception explanation, and report summary.",
                 "支持自然语言查询、异常解释和报表总结的 ERP 助手。",
                 "自然言語検索、例外説明、レポート要約を行う ERP アシスタント。");

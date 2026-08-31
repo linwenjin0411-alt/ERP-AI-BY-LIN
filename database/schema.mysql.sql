@@ -407,3 +407,82 @@ insert into erp_module_focus_items (module_code, sort_order, item_value) values
 ('AI', 10, 'ai.answer'), ('AI', 20, 'dashboard.alert.1'), ('AI', 30, 'dashboard.alert.2'),
 ('ADMIN', 10, 'focus.admin.permissions'), ('ADMIN', 20, 'focus.admin.workflow'), ('ADMIN', 30, 'focus.admin.audit')
 on duplicate key update item_value = values(item_value);
+
+insert into erp_modules (code, title_key, subtitle_key, page_type, table_title_key, process_title_key, focus_title_key, prompt_value, sort_order, active) values
+('REPORTS', 'module.reports', 'reports.subtitle', 'OPERATIONAL', 'table.worklist', 'panel.process', 'panel.todo', null, 75, 1)
+on duplicate key update title_key = values(title_key), subtitle_key = values(subtitle_key), page_type = values(page_type),
+table_title_key = values(table_title_key), process_title_key = values(process_title_key), focus_title_key = values(focus_title_key),
+prompt_value = values(prompt_value), sort_order = values(sort_order), active = values(active);
+
+insert into erp_menus (code, parent_code, name_key, module_code, sort_order, active) values
+('REPORTS', null, 'module.reports', 'REPORTS', 75, 1),
+('REPORTS_CORE', 'REPORTS', 'module.reports', 'REPORTS', 10, 1),
+('REPORTS_BUSINESS', 'REPORTS_CORE', 'menu.section.reports', 'REPORTS', 10, 1),
+('REPORT_SALES_DETAIL', 'REPORTS_BUSINESS', 'menu.report.salesDetail', 'REPORTS', 10, 1),
+('REPORT_PURCHASE_DETAIL', 'REPORTS_BUSINESS', 'menu.report.purchaseDetail', 'REPORTS', 20, 1),
+('REPORT_INVENTORY_DETAIL', 'REPORTS_BUSINESS', 'menu.report.inventoryDetail', 'REPORTS', 30, 1),
+('REPORT_AR_BALANCE', 'REPORTS_BUSINESS', 'menu.report.arBalance', 'REPORTS', 40, 1),
+('REPORT_AP_BALANCE', 'REPORTS_BUSINESS', 'menu.report.apBalance', 'REPORTS', 50, 1),
+('PROCUREMENT_PO_QUERY', 'PROCUREMENT_BUYING', 'menu.procurement.poQuery', 'PROCUREMENT', 30, 1),
+('PROCUREMENT_RECEIPT_QUERY', 'PROCUREMENT_INBOUND', 'menu.procurement.receiptQuery', 'PROCUREMENT', 20, 1),
+('PROCUREMENT_CONFIRMATION', 'PROCUREMENT_SETTLEMENT', 'menu.procurement.confirmation', 'PROCUREMENT', 5, 1),
+('PROCUREMENT_RETURN', 'PROCUREMENT_SETTLEMENT', 'menu.procurement.return', 'PROCUREMENT', 20, 1),
+('SALES_ORDER_QUERY', 'SALES_ORDERING', 'menu.sales.orderQuery', 'SALES', 30, 1),
+('SALES_SHIPMENT_QUERY', 'SALES_FULFILLMENT', 'menu.sales.shipmentQuery', 'SALES', 20, 1),
+('SALES_CONFIRMATION', 'SALES_BILLING_SECTION', 'menu.sales.confirmation', 'SALES', 5, 1),
+('SALES_RETURN', 'SALES_BILLING_SECTION', 'menu.sales.return', 'SALES', 20, 1),
+('INVENTORY_LEDGER', 'INVENTORY_STOCK_SECTION', 'menu.inventory.ledger', 'INVENTORY', 15, 1),
+('MANUFACTURING_ORDER_QUERY', 'MANUFACTURING_PLAN_SECTION', 'menu.manufacturing.orderQuery', 'MANUFACTURING', 30, 1),
+('MANUFACTURING_COMPLETE', 'MANUFACTURING_EXEC_SECTION', 'menu.manufacturing.complete', 'MANUFACTURING', 20, 1),
+('MANUFACTURING_RETURN', 'MANUFACTURING_EXEC_SECTION', 'menu.manufacturing.return', 'MANUFACTURING', 30, 1),
+('FINANCE_COLLECTION', 'FINANCE_RECEIVABLES', 'menu.finance.collection', 'FINANCE', 20, 1),
+('FINANCE_COLLECTION_QUERY', 'FINANCE_RECEIVABLES', 'menu.finance.collectionQuery', 'FINANCE', 30, 1),
+('FINANCE_PAYMENT', 'FINANCE_PAYABLES', 'menu.finance.payment', 'FINANCE', 20, 1),
+('FINANCE_PAYMENT_QUERY', 'FINANCE_PAYABLES', 'menu.finance.paymentQuery', 'FINANCE', 30, 1)
+on duplicate key update parent_code = values(parent_code), name_key = values(name_key),
+module_code = values(module_code), sort_order = values(sort_order), active = values(active);
+
+insert ignore into erp_role_menus (role_id, menu_id, can_view, can_create, can_update, can_approve)
+select r.id, m.id, 1, 1, 1, 1
+from erp_roles r join erp_menus m
+where r.code = 'ADMIN';
+
+insert ignore into erp_role_menus (role_id, menu_id, can_view, can_create, can_update, can_approve)
+select r.id, m.id, 1,
+       if(m.module_code in ('MASTER','ADMIN','REPORTS'), 0, 1),
+       if(m.module_code = 'ADMIN', 0, 1),
+       if(m.module_code in ('PROCUREMENT','MANUFACTURING'), 1, 0)
+from erp_roles r join erp_menus m
+where r.code = 'PLANNER';
+
+insert into erp_module_actions (module_code, sort_order, action_key) values
+('REPORTS', 10, 'action.refresh'), ('REPORTS', 20, 'action.export')
+on duplicate key update action_key = values(action_key);
+
+insert into erp_module_process_steps (module_code, sort_order, label_value) values
+('REPORTS', 10, 'term.salesOrder'), ('REPORTS', 20, 'term.purchaseOrder'), ('REPORTS', 30, 'term.stockOverview'),
+('REPORTS', 40, 'term.ar'), ('REPORTS', 50, 'term.ap')
+on duplicate key update label_value = values(label_value);
+
+insert into erp_module_metrics (module_code, location, sort_order, label_value, metric_value, note_value, accent_code) values
+('REPORTS', 'SIDE', 10, 'menu.report.salesDetail', '4', null, 'accent'),
+('REPORTS', 'SIDE', 20, 'menu.report.inventoryDetail', '5', null, 'success'),
+('REPORTS', 'SIDE', 30, 'menu.report.arBalance', '$318,400', null, 'warning')
+on duplicate key update label_value = values(label_value), metric_value = values(metric_value), note_value = values(note_value), accent_code = values(accent_code);
+
+insert into erp_module_table_columns (module_code, sort_order, column_key) values
+('REPORTS', 10, 'column.id'), ('REPORTS', 20, 'column.type'), ('REPORTS', 30, 'column.amount'),
+('REPORTS', 40, 'column.status'), ('REPORTS', 50, 'column.date'), ('REPORTS', 60, 'column.next')
+on duplicate key update column_key = values(column_key);
+
+insert into erp_module_table_rows (module_code, sort_order, c1, c2, c3, c4, c5, c6, c7) values
+('REPORTS', 10, 'RPT-SALES-2608', 'menu.report.salesDetail', '$262,000', 'status.ready', '2026-08-31', 'action.export', null),
+('REPORTS', 20, 'RPT-PUR-2608', 'menu.report.purchaseDetail', '$174,200', 'status.ready', '2026-08-31', 'action.export', null),
+('REPORTS', 30, 'RPT-STK-2608', 'menu.report.inventoryDetail', '$1,284,000', 'status.open', '2026-08-31', 'action.refresh', null),
+('REPORTS', 40, 'RPT-AR-2608', 'menu.report.arBalance', '$318,400', 'status.open', '2026-08-31', 'action.details', null),
+('REPORTS', 50, 'RPT-AP-2608', 'menu.report.apBalance', '$174,200', 'status.open', '2026-08-31', 'action.details', null)
+on duplicate key update c1 = values(c1), c2 = values(c2), c3 = values(c3), c4 = values(c4), c5 = values(c5), c6 = values(c6), c7 = values(c7);
+
+insert into erp_module_focus_items (module_code, sort_order, item_value) values
+('REPORTS', 10, 'menu.report.salesDetail'), ('REPORTS', 20, 'menu.report.inventoryDetail'), ('REPORTS', 30, 'menu.report.arBalance')
+on duplicate key update item_value = values(item_value);

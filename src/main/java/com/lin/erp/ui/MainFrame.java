@@ -168,19 +168,35 @@ public class MainFrame extends JFrame {
                 "PROCUREMENT_PR", "menu.procurement.pr");
         addFallbackFunction("PROCUREMENT", "PROCUREMENT_SOURCE", "menu.area.procurement.source", "PROCUREMENT_BUYING", "menu.section.buying",
                 "PROCUREMENT_PO", "menu.procurement.po");
+        addFallbackFunction("PROCUREMENT", "PROCUREMENT_SOURCE", "menu.area.procurement.source", "PROCUREMENT_BUYING", "menu.section.buying",
+                "PROCUREMENT_PO_QUERY", "menu.procurement.poQuery");
         addFallbackFunction("PROCUREMENT", "PROCUREMENT_RECEIVE", "menu.area.procurement.receiving", "PROCUREMENT_INBOUND", "menu.section.inbound",
                 "PROCUREMENT_RECEIPT", "menu.procurement.receipt");
+        addFallbackFunction("PROCUREMENT", "PROCUREMENT_RECEIVE", "menu.area.procurement.receiving", "PROCUREMENT_INBOUND", "menu.section.inbound",
+                "PROCUREMENT_RECEIPT_QUERY", "menu.procurement.receiptQuery");
+        addFallbackFunction("PROCUREMENT", "PROCUREMENT_RECEIVE", "menu.area.procurement.receiving", "PROCUREMENT_SETTLEMENT", "menu.section.settlement",
+                "PROCUREMENT_CONFIRMATION", "menu.procurement.confirmation");
         addFallbackFunction("PROCUREMENT", "PROCUREMENT_RECEIVE", "menu.area.procurement.receiving", "PROCUREMENT_SETTLEMENT", "menu.section.settlement",
                 "PROCUREMENT_INVOICE", "menu.procurement.invoice");
+        addFallbackFunction("PROCUREMENT", "PROCUREMENT_RECEIVE", "menu.area.procurement.receiving", "PROCUREMENT_SETTLEMENT", "menu.section.settlement",
+                "PROCUREMENT_RETURN", "menu.procurement.return");
 
         addFallbackFunction("SALES", "SALES_DOMESTIC", "menu.area.sales.domestic", "SALES_ORDERING", "menu.section.ordering",
                 "SALES_QUOTATION", "menu.sales.quotation");
         addFallbackFunction("SALES", "SALES_DOMESTIC", "menu.area.sales.domestic", "SALES_ORDERING", "menu.section.ordering",
                 "SALES_ORDER", "menu.sales.order");
+        addFallbackFunction("SALES", "SALES_DOMESTIC", "menu.area.sales.domestic", "SALES_ORDERING", "menu.section.ordering",
+                "SALES_ORDER_QUERY", "menu.sales.orderQuery");
         addFallbackFunction("SALES", "SALES_DOMESTIC", "menu.area.sales.domestic", "SALES_FULFILLMENT", "menu.section.fulfillment",
                 "SALES_SHIPMENT", "menu.sales.shipment");
+        addFallbackFunction("SALES", "SALES_DOMESTIC", "menu.area.sales.domestic", "SALES_FULFILLMENT", "menu.section.fulfillment",
+                "SALES_SHIPMENT_QUERY", "menu.sales.shipmentQuery");
+        addFallbackFunction("SALES", "SALES_DOMESTIC", "menu.area.sales.domestic", "SALES_BILLING_SECTION", "menu.section.billing",
+                "SALES_CONFIRMATION", "menu.sales.confirmation");
         addFallbackFunction("SALES", "SALES_DOMESTIC", "menu.area.sales.domestic", "SALES_BILLING_SECTION", "menu.section.billing",
                 "SALES_BILLING", "menu.sales.billing");
+        addFallbackFunction("SALES", "SALES_DOMESTIC", "menu.area.sales.domestic", "SALES_BILLING_SECTION", "menu.section.billing",
+                "SALES_RETURN", "menu.sales.return");
         addFallbackFunction("SALES", "SALES_EXPORT_AREA", "menu.area.sales.export", "SALES_EXPORT_SECTION", "menu.section.export",
                 "SALES_EXPORT_ORDER", "menu.sales.exportOrder");
         addFallbackFunction("SALES", "SALES_APPROVAL_AREA", "menu.area.approval", "SALES_APPROVAL_SECTION", "menu.section.approval",
@@ -188,6 +204,8 @@ public class MainFrame extends JFrame {
 
         addFallbackFunction("INVENTORY", "INVENTORY_CONTROL", "menu.area.inventory.control", "INVENTORY_STOCK_SECTION", "menu.section.stock",
                 "INVENTORY_STOCK", "menu.inventory.stock");
+        addFallbackFunction("INVENTORY", "INVENTORY_CONTROL", "menu.area.inventory.control", "INVENTORY_STOCK_SECTION", "menu.section.stock",
+                "INVENTORY_LEDGER", "menu.inventory.ledger");
         addFallbackFunction("INVENTORY", "INVENTORY_CONTROL", "menu.area.inventory.control", "INVENTORY_STOCK_SECTION", "menu.section.stock",
                 "INVENTORY_TRANSFER", "menu.inventory.transfer");
         addFallbackFunction("INVENTORY", "INVENTORY_TRACE_AREA", "menu.area.inventory.trace", "INVENTORY_TRACE_SECTION", "menu.section.trace",
@@ -199,15 +217,29 @@ public class MainFrame extends JFrame {
                 "MANUFACTURING_MRP", "menu.manufacturing.mrp");
         addFallbackFunction("MANUFACTURING", "MANUFACTURING_PLANNING", "menu.area.manufacturing.planning", "MANUFACTURING_PLAN_SECTION", "menu.section.planning",
                 "MANUFACTURING_ORDER", "menu.manufacturing.order");
+        addFallbackFunction("MANUFACTURING", "MANUFACTURING_PLANNING", "menu.area.manufacturing.planning", "MANUFACTURING_PLAN_SECTION", "menu.section.planning",
+                "MANUFACTURING_ORDER_QUERY", "menu.manufacturing.orderQuery");
         addFallbackFunction("MANUFACTURING", "MANUFACTURING_EXECUTION", "menu.area.manufacturing.execution", "MANUFACTURING_EXEC_SECTION", "menu.section.execution",
                 "MANUFACTURING_ISSUE", "menu.manufacturing.issue");
+        addFallbackFunction("MANUFACTURING", "MANUFACTURING_EXECUTION", "menu.area.manufacturing.execution", "MANUFACTURING_EXEC_SECTION", "menu.section.execution",
+                "MANUFACTURING_COMPLETE", "menu.manufacturing.complete");
+        addFallbackFunction("MANUFACTURING", "MANUFACTURING_EXECUTION", "menu.area.manufacturing.execution", "MANUFACTURING_EXEC_SECTION", "menu.section.execution",
+                "MANUFACTURING_RETURN", "menu.manufacturing.return");
         addFallbackFunction("MANUFACTURING", "MANUFACTURING_EXECUTION", "menu.area.manufacturing.execution", "MANUFACTURING_COST_SECTION", "menu.section.costing",
                 "MANUFACTURING_COST", "menu.manufacturing.cost");
 
         addFallbackFunction("FINANCE", "FINANCE_ACCOUNTING", "menu.area.finance.accounting", "FINANCE_RECEIVABLES", "menu.section.receivables",
                 "FINANCE_AR", "menu.finance.ar");
+        addFallbackFunction("FINANCE", "FINANCE_ACCOUNTING", "menu.area.finance.accounting", "FINANCE_RECEIVABLES", "menu.section.receivables",
+                "FINANCE_COLLECTION", "menu.finance.collection");
+        addFallbackFunction("FINANCE", "FINANCE_ACCOUNTING", "menu.area.finance.accounting", "FINANCE_RECEIVABLES", "menu.section.receivables",
+                "FINANCE_COLLECTION_QUERY", "menu.finance.collectionQuery");
         addFallbackFunction("FINANCE", "FINANCE_ACCOUNTING", "menu.area.finance.accounting", "FINANCE_PAYABLES", "menu.section.payables",
                 "FINANCE_AP", "menu.finance.ap");
+        addFallbackFunction("FINANCE", "FINANCE_ACCOUNTING", "menu.area.finance.accounting", "FINANCE_PAYABLES", "menu.section.payables",
+                "FINANCE_PAYMENT", "menu.finance.payment");
+        addFallbackFunction("FINANCE", "FINANCE_ACCOUNTING", "menu.area.finance.accounting", "FINANCE_PAYABLES", "menu.section.payables",
+                "FINANCE_PAYMENT_QUERY", "menu.finance.paymentQuery");
         addFallbackFunction("FINANCE", "FINANCE_CLOSE_AREA", "menu.area.finance.close", "FINANCE_GL_SECTION", "menu.section.ledger",
                 "FINANCE_GL", "menu.finance.gl");
         addFallbackFunction("FINANCE", "FINANCE_CLOSE_AREA", "menu.area.finance.close", "FINANCE_PERIOD_SECTION", "menu.section.close",
