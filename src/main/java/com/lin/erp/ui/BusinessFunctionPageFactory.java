@@ -105,6 +105,33 @@ public final class BusinessFunctionPageFactory {
         if ("FINANCE_PAYMENT_QUERY".equals(code)) {
             return new PaymentQueryPanel(owner, session, function);
         }
+        if ("REPORT_SALES_DETAIL".equals(code)) {
+            return new SalesDetailReportPanel(owner, session, function);
+        }
+        if ("REPORT_PURCHASE_DETAIL".equals(code)) {
+            return new PurchaseDetailReportPanel(owner, session, function);
+        }
+        if ("REPORT_INVENTORY_DETAIL".equals(code)) {
+            return new InventoryDetailReportPanel(owner, session, function);
+        }
+        if ("REPORT_AR_BALANCE".equals(code)) {
+            return new ReceivableBalanceReportPanel(owner, session, function);
+        }
+        if ("REPORT_AP_BALANCE".equals(code)) {
+            return new PayableBalanceReportPanel(owner, session, function);
+        }
+        if ("ADMIN_USERS".equals(code)) {
+            return new UserManagementPanel(owner, session, function);
+        }
+        if ("ADMIN_ROLES".equals(code)) {
+            return new RoleManagementPanel(owner, session, function);
+        }
+        if ("ADMIN_PERMISSIONS".equals(code)) {
+            return new PermissionManagementPanel(owner, session, function);
+        }
+        if ("ADMIN_AUDIT".equals(code)) {
+            return new OperationLogPanel(owner, session, function);
+        }
         return new BusinessFunctionPanel(owner, session, function);
     }
 }
