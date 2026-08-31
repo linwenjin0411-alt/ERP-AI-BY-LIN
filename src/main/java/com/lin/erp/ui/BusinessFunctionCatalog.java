@@ -363,6 +363,13 @@ public final class BusinessFunctionCatalog {
                 "Role -> User / Menu permission",
                 "User and organization",
                 "Menu permission");
+        add("ADMIN_PERMISSIONS", transactionFields(),
+                new String[]{"PERM-PLN", "2026/08/31", "status.open", "ROLE-PLN", "PROCUREMENT", "1", "MENU", "owner.system", "View/create/update procurement menus"},
+                new String[]{"column.id", "column.name", "column.type", "column.status", "column.next"},
+                new String[][]{{"PERM-PO", "menu.procurement.po", "term.permissions", "status.released", "menu.admin.audit"}, {"PERM-MO", "menu.manufacturing.order", "term.permissions", "status.open", "menu.admin.audit"}},
+                "Role -> Menu permission -> User menu",
+                "Role and menu master",
+                "Authorized business pages");
         add("ADMIN_AUDIT", transactionFields(),
                 new String[]{"AUD-2608", "2026/08/31", "status.ready", "LINOVA", "WORKFLOW_ACTION", "1280", "SYSTEM", "owner.system", "Key operation log"},
                 new String[]{"column.date", "column.owner", "column.type", "column.status", "column.next"},
