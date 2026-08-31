@@ -129,6 +129,9 @@ public final class BusinessFunctionPageFactory {
         if ("ADMIN_PERMISSIONS".equals(code)) {
             return new PermissionManagementPanel(owner, session, function);
         }
+        if ("ADMIN_LICENSE".equals(code)) {
+            return new LicenseManagementPanel(owner, session, function);
+        }
         if ("ADMIN_AUDIT".equals(code)) {
             return new OperationLogPanel(owner, session, function);
         }

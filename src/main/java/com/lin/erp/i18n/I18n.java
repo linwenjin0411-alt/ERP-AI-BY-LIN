@@ -67,6 +67,31 @@ public final class I18n {
         put("message.delete.failed", "Delete failed. See the app log for details.", "删除失败，请查看应用日志。", "削除に失敗しました。アプリログを確認してください。");
         put("message.delete.confirm", "Delete selected record", "删除所选记录", "選択したレコードを削除します");
         put("message.item.required", "Item code and item name are required.", "品目编号和品目名称为必填项。", "品目コードと品目名は必須です。");
+        put("license.prompt.title", "License required", "需要许可证", "ライセンスが必要です");
+        put("license.prompt.message", "Enter a valid license key. Format: LINOVA-yyyyMMdd or LINOVA-yyyy-MM-dd.",
+                "请输入有效许可证。格式：LINOVA-yyyyMMdd 或 LINOVA-yyyy-MM-dd。",
+                "有効なライセンスキーを入力してください。形式：LINOVA-yyyyMMdd または LINOVA-yyyy-MM-dd。");
+        put("license.required", "A valid license is required before sign-in can continue.",
+                "必须输入有效许可证后才能继续登录。",
+                "ログインを続行するには有効なライセンスが必要です。");
+        put("license.invalid", "The license key is invalid or expired.",
+                "许可证无效或已过期。",
+                "ライセンスキーが無効、または期限切れです。");
+        put("license.register.success", "License registered. Valid until: ",
+                "许可证已登记，有效期至：",
+                "ライセンスを登録しました。有効期限：");
+        put("license.check.failed", "License status could not be checked. See the app log for details.",
+                "无法检查许可证状态，请查看应用日志。",
+                "ライセンス状態を確認できません。アプリログを確認してください。");
+        put("license.save.failed", "License could not be saved. See the app log for details.",
+                "许可证保存失败，请查看应用日志。",
+                "ライセンスを保存できません。アプリログを確認してください。");
+        put("license.field.key", "License Key", "许可证密钥", "ライセンスキー");
+        put("license.field.validFrom", "Valid From", "有效开始日", "有効開始日");
+        put("license.field.validUntil", "Valid Until", "有效截止日", "有効期限");
+        put("license.action.register", "Register License", "登记许可证", "ライセンス登録");
+        put("license.status.valid", "Valid until: ", "有效期至：", "有効期限：");
+        put("license.status.invalid", "No valid license", "没有有效许可证", "有効なライセンスがありません");
         put("dialog.confirm.title", "Confirm action", "确认操作", "操作確認");
         put("dialog.confirm.action", "Action", "操作", "操作");
         put("dialog.confirm.record", "Record", "记录", "レコード");
@@ -269,6 +294,7 @@ public final class I18n {
         put("menu.admin.users", "User Management", "用户管理", "ユーザー管理");
         put("menu.admin.roles", "Role Management", "角色管理", "ロール管理");
         put("menu.admin.permissions", "Permission Management", "权限管理", "権限管理");
+        put("menu.admin.license", "License Management", "许可证管理", "ライセンス管理");
         put("menu.admin.audit", "Audit Log", "审计日志", "監査ログ");
 
         put("dashboard.subtitle", "Operational command center inspired by SAP-style process integration and mcframe-style manufacturing flow.",

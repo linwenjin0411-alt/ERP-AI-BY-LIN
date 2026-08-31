@@ -160,6 +160,16 @@ create table if not exists erp_function_records (
   index idx_erp_function_records_code (function_code)
 ) engine=InnoDB default charset=utf8mb4;
 
+create table if not exists erp_licenses (
+  id bigint primary key auto_increment,
+  license_key varchar(160) not null,
+  valid_from date not null,
+  valid_until date not null,
+  active tinyint(1) not null default 1,
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp
+) engine=InnoDB default charset=utf8mb4;
+
 insert into erp_companies (code, name, active) values
 ('LINOVA', 'Linova Smart Manufacturing Ltd.', 1)
 on duplicate key update name = values(name), active = values(active);
@@ -287,6 +297,7 @@ insert into erp_menus (code, parent_code, name_key, module_code, sort_order, act
 ('ADMIN_USERS', 'ADMIN_USER_SECTION', 'menu.admin.users', 'ADMIN', 10, 1),
 ('ADMIN_ROLES', 'ADMIN_ROLE_SECTION', 'menu.admin.roles', 'ADMIN', 10, 1),
 ('ADMIN_PERMISSIONS', 'ADMIN_ROLE_SECTION', 'menu.admin.permissions', 'ADMIN', 20, 1),
+('ADMIN_LICENSE', 'ADMIN_ROLE_SECTION', 'menu.admin.license', 'ADMIN', 30, 1),
 ('ADMIN_AUDIT', 'ADMIN_AUDIT_SECTION', 'menu.admin.audit', 'ADMIN', 10, 1)
 on duplicate key update parent_code = values(parent_code), name_key = values(name_key),
 module_code = values(module_code), sort_order = values(sort_order), active = values(active);
@@ -454,7 +465,8 @@ insert into erp_menus (code, parent_code, name_key, module_code, sort_order, act
 ('FINANCE_COLLECTION', 'FINANCE_RECEIVABLES', 'menu.finance.collection', 'FINANCE', 20, 1),
 ('FINANCE_COLLECTION_QUERY', 'FINANCE_RECEIVABLES', 'menu.finance.collectionQuery', 'FINANCE', 30, 1),
 ('FINANCE_PAYMENT', 'FINANCE_PAYABLES', 'menu.finance.payment', 'FINANCE', 20, 1),
-('FINANCE_PAYMENT_QUERY', 'FINANCE_PAYABLES', 'menu.finance.paymentQuery', 'FINANCE', 30, 1)
+('FINANCE_PAYMENT_QUERY', 'FINANCE_PAYABLES', 'menu.finance.paymentQuery', 'FINANCE', 30, 1),
+('ADMIN_LICENSE', 'ADMIN_ROLE_SECTION', 'menu.admin.license', 'ADMIN', 30, 1)
 on duplicate key update parent_code = values(parent_code), name_key = values(name_key),
 module_code = values(module_code), sort_order = values(sort_order), active = values(active);
 

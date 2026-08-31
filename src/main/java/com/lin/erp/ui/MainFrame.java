@@ -258,6 +258,8 @@ public class MainFrame extends JFrame {
                 "ADMIN_ROLES", "menu.admin.roles");
         addFallbackFunction("ADMIN", "ADMIN_SECURITY", "menu.area.admin.security", "ADMIN_ROLE_SECTION", "menu.section.roles",
                 "ADMIN_PERMISSIONS", "menu.admin.permissions");
+        addFallbackFunction("ADMIN", "ADMIN_SECURITY", "menu.area.admin.security", "ADMIN_ROLE_SECTION", "menu.section.roles",
+                "ADMIN_LICENSE", "menu.admin.license");
         addFallbackFunction("ADMIN", "ADMIN_AUDIT_AREA", "menu.area.admin.audit", "ADMIN_AUDIT_SECTION", "menu.section.audit",
                 "ADMIN_AUDIT", "menu.admin.audit");
     }
