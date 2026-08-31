@@ -87,6 +87,24 @@ public final class BusinessFunctionPageFactory {
         if ("MANUFACTURING_RETURN".equals(code)) {
             return new MaterialReturnPanel(owner, session, function);
         }
+        if ("FINANCE_AR".equals(code)) {
+            return new AccountsReceivableQueryPanel(owner, session, function);
+        }
+        if ("FINANCE_COLLECTION".equals(code)) {
+            return new CollectionEntryPanel(owner, session, function);
+        }
+        if ("FINANCE_COLLECTION_QUERY".equals(code)) {
+            return new CollectionQueryPanel(owner, session, function);
+        }
+        if ("FINANCE_AP".equals(code)) {
+            return new AccountsPayableQueryPanel(owner, session, function);
+        }
+        if ("FINANCE_PAYMENT".equals(code)) {
+            return new PaymentEntryPanel(owner, session, function);
+        }
+        if ("FINANCE_PAYMENT_QUERY".equals(code)) {
+            return new PaymentQueryPanel(owner, session, function);
+        }
         return new BusinessFunctionPanel(owner, session, function);
     }
 }
