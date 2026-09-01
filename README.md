@@ -13,6 +13,7 @@ The name keeps `Lin` as the project identity, uses `nova` for a clean innovation
 - Default language: English
 - UI languages: English, Simplified Chinese, Japanese
 - Login page with language switcher
+- License validation before the workspace opens
 - ERP cockpit after login
 - SAP / mcframe inspired modules and process flow
 - MySQL-backed user, company, role, menu, and role-menu tables
@@ -96,6 +97,29 @@ Normal messages, such as sign-in success or operation completion, appear as smal
 
 Main navigation uses an mcframe-style three-level layout: dark root module menu, secondary business-area rail, and a function-button grid with teal section headers. Clicking a function opens a separate desktop window. `Master Data -> Master Maintenance -> Item Master Management` opens the item master window backed by `erp_item_masters`, with create, edit, delete, refresh, and CSV export actions.
 
+## License
+
+After a user ID and password are accepted, the login flow checks whether an active license is still within its valid date range. If no valid license exists, the login window shows a localized English, Simplified Chinese, or Japanese prompt and asks for a license key before opening the ERP workspace.
+
+Supported license key formats:
+
+```text
+LINOVA-yyyyMMdd
+LINOVA-yyyy-MM-dd
+```
+
+Example:
+
+```text
+LINOVA-20271231
+```
+
+The date portion is treated as the license expiration date. Expired or malformed keys are rejected, and the login window remains open.
+
+When MySQL is enabled, licenses are stored in `erp_licenses`. When demo mode is used without MySQL, the license is stored locally in `config/license.properties`.
+
+Administrators can also open `Administration -> Security -> Roles -> License Management` / `系统管理 -> 安全权限 -> 角色 -> 许可证管理` / `システム管理 -> セキュリティ -> ロール -> ライセンス管理` to view the current license status and register a new license.
+
 ## MySQL
 
 The application reads local database settings from:
@@ -142,6 +166,8 @@ The program creates these initial tables:
 - `erp_module_table_rows`
 - `erp_module_focus_items`
 - `erp_item_masters`
+- `erp_function_records`
+- `erp_licenses`
 
 Most screen data shown after login now comes from MySQL. This includes module names, three-level menus, toolbar actions, process flows, KPI cards, worklist tables, focus items, and item master records.
 
@@ -182,6 +208,7 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - Finance
 - AI Assistant
 - Administration
+- Reports
 
 ## Notes
 
