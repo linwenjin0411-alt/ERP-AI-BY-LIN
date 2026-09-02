@@ -179,20 +179,6 @@ insert into erp_roles (code, name, active) values
 ('PLANNER', 'Production Planner', 1)
 on duplicate key update name = values(name), active = values(active);
 
-insert into erp_users (username, password_hash, display_name, email, company_id, role_id, active)
-select 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
-       'System Administrator', 'admin@linova.local', c.id, r.id, 1
-from erp_companies c, erp_roles r
-where c.code = 'LINOVA' and r.code = 'ADMIN'
-on duplicate key update display_name = values(display_name), company_id = values(company_id), role_id = values(role_id), active = values(active);
-
-insert into erp_users (username, password_hash, display_name, email, company_id, role_id, active)
-select 'planner', '22ab6a65b4e819b25a52b7bd9b34c1e91c8ddc4d5861a2a2c193eae89fccd24d',
-       'Production Planner', 'planner@linova.local', c.id, r.id, 1
-from erp_companies c, erp_roles r
-where c.code = 'LINOVA' and r.code = 'PLANNER'
-on duplicate key update display_name = values(display_name), company_id = values(company_id), role_id = values(role_id), active = values(active);
-
 insert into erp_modules (code, title_key, subtitle_key, page_type, table_title_key, process_title_key, focus_title_key, prompt_value, sort_order, active) values
 ('DASHBOARD', 'module.dashboard', 'dashboard.subtitle', 'DASHBOARD', 'table.sample', 'dashboard.process.title', 'dashboard.alerts.title', null, 10, 1),
 ('MASTER', 'module.master', 'master.subtitle', 'OPERATIONAL', 'table.worklist', 'panel.process', 'panel.todo', null, 20, 1),

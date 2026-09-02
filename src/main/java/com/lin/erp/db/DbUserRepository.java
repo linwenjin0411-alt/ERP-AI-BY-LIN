@@ -74,6 +74,51 @@ public class DbUserRepository {
         }
     }
 
+    public int countUsers() throws SQLException {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        ResultSet resultSet = null;
+        try {
+            connection = Database.connect(config);
+            statement = connection.prepareStatement("select count(*) from erp_users");
+            resultSet = statement.executeQuery();
+            return resultSet.next() ? resultSet.getInt(1) : 0;
+        } finally {
+            if (resultSet != null) {
+                resultSet.close();
+            }
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+
+    public void createInitialAdmin(String passwordHash) throws SQLException {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        try {
+            connection = Database.connect(config);
+            statement = connection.prepareStatement(
+                    "insert into erp_users (username, password_hash, display_name, email, company_id, role_id, active) "
+                            + "select 'admin', ?, 'System Administrator', 'admin@linova.local', c.id, r.id, 1 "
+                            + "from erp_companies c, erp_roles r "
+                            + "where c.code = 'LINOVA' and r.code = 'ADMIN'"
+            );
+            statement.setString(1, passwordHash);
+            statement.executeUpdate();
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+
     public static class DbAccount {
         private final String username;
         private final String passwordHash;
