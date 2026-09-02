@@ -25,7 +25,7 @@ public class DbItemMasterRepository {
             ensureSchema(connection);
             statement = connection.prepareStatement(
                     "select item_code, item_name, item_type, uom, plant, status, safety_stock, lead_time_days "
-                            + "from erp_item_masters order by item_code"
+                            + "from erp_item_masters where active = 1 order by item_code"
             );
             resultSet = statement.executeQuery();
             List<ItemMasterRecord> records = new ArrayList<ItemMasterRecord>();
@@ -89,7 +89,9 @@ public class DbItemMasterRepository {
         try {
             connection = Database.connect(config);
             ensureSchema(connection);
-            statement = connection.prepareStatement("delete from erp_item_masters where item_code = ?");
+            statement = connection.prepareStatement(
+                    "update erp_item_masters set active = 0, status = 'status.cancelled' where item_code = ?"
+            );
             statement.setString(1, itemCode);
             statement.executeUpdate();
         } finally {
@@ -111,6 +113,7 @@ public class DbItemMasterRepository {
                             + "status varchar(80) not null,"
                             + "safety_stock varchar(40),"
                             + "lead_time_days varchar(40),"
+                            + "active tinyint(1) not null default 1,"
                             + "created_at timestamp not null default current_timestamp,"
                             + "updated_at timestamp not null default current_timestamp on update current_timestamp"
                             + ") engine=InnoDB default charset=utf8mb4"
@@ -121,6 +124,7 @@ public class DbItemMasterRepository {
                 statement.close();
             }
         }
+        DatabaseSchema.ensureColumn(connection, "erp_item_masters", "active", "active tinyint(1) not null default 1");
         seedIfEmpty(connection);
     }
 

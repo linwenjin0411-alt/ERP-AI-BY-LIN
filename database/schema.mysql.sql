@@ -140,6 +140,7 @@ create table if not exists erp_item_masters (
   status varchar(80) not null,
   safety_stock varchar(40),
   lead_time_days varchar(40),
+  active tinyint(1) not null default 1,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp
 ) engine=InnoDB default charset=utf8mb4;
@@ -155,6 +156,7 @@ create table if not exists erp_function_records (
   c6 varchar(255),
   c7 varchar(255),
   c8 varchar(255),
+  active tinyint(1) not null default 1,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp,
   index idx_erp_function_records_code (function_code)
