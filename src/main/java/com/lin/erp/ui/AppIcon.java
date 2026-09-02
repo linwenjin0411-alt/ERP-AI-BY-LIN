@@ -34,7 +34,7 @@ public final class AppIcon {
         int pad = Math.max(1, size / 10);
         int arc = Math.max(4, size / 4);
         RoundRectangle2D.Float shape = new RoundRectangle2D.Float(pad, pad, size - pad * 2, size - pad * 2, arc, arc);
-        g.setPaint(new GradientPaint(0, 0, new Color(40, 116, 194), size, size, new Color(44, 174, 153)));
+        g.setPaint(new GradientPaint(0, 0, new Color(20, 112, 107), size, size, new Color(23, 148, 137)));
         g.fill(shape);
 
         g.setColor(new Color(255, 255, 255, 55));

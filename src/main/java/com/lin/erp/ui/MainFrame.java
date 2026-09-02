@@ -387,13 +387,15 @@ public class MainFrame extends JFrame {
         brand.add(brandTaglineLabel);
         sidebar.add(brand, BorderLayout.NORTH);
 
-        JPanel menu = new JPanel(new GridLayout(0, 1, 0, 7));
+        JPanel menu = new JPanel();
+        menu.setLayout(new BoxLayout(menu, BoxLayout.Y_AXIS));
         menu.setOpaque(false);
         menu.setBorder(AppTheme.emptyBorder(28, 0, 20, 0));
         for (ModulePageData module : modules) {
             JButton button = createNavButton(module);
             navButtons.add(button);
             menu.add(button);
+            menu.add(Box.createVerticalStrut(7));
         }
         sidebar.add(menu, BorderLayout.CENTER);
 
@@ -420,6 +422,10 @@ public class MainFrame extends JFrame {
         button.putClientProperty("JButton.buttonType", "roundRect");
         button.putClientProperty("FlatLaf.style", "arc: 10; borderWidth: 0; focusWidth: 1");
         button.setHorizontalAlignment(SwingConstants.LEFT);
+        button.setAlignmentX(Component.LEFT_ALIGNMENT);
+        button.setPreferredSize(new Dimension(220, 40));
+        button.setMinimumSize(new Dimension(220, 40));
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.setFocusPainted(false);
         button.setBorderPainted(false);
