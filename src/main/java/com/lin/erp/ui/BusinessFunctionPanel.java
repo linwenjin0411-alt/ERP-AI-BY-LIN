@@ -317,19 +317,31 @@ public class BusinessFunctionPanel extends JPanel {
             return;
         }
 
-        try {
-            if (editMode) {
-                repository.updateRecord(selected.getId(), valuesForTable(formValues, currentStatusValue(formValues)));
-                AppMessages.success(owner, t("message.edit.success"));
-            } else {
-                repository.createRecord(function.getCode(), valuesForTable(formValues, "status.open"));
-                AppMessages.success(owner, t("message.create.success"));
-            }
-            reload();
-        } catch (SQLException e) {
-            AppLogger.error("Function record save failed.", e);
-            AppMessages.error(owner, t("message.error.title"), t("message.save.failed"));
-        }
+        final FunctionRecord selectedRecord = selected;
+        BackgroundTasks.run(
+                owner,
+                "Function record save failed.",
+                t("message.error.title"),
+                t("message.save.failed"),
+                new BackgroundTasks.Work<Void>() {
+                    @Override
+                    public Void run() throws Exception {
+                        if (editMode) {
+                            repository.updateRecord(selectedRecord.getId(), valuesForTable(formValues, currentStatusValue(formValues)));
+                        } else {
+                            repository.createRecord(function.getCode(), valuesForTable(formValues, "status.open"));
+                        }
+                        return null;
+                    }
+                },
+                new BackgroundTasks.Success<Void>() {
+                    @Override
+                    public void accept(Void value) {
+                        AppMessages.success(owner, editMode ? t("message.edit.success") : t("message.create.success"));
+                        reload();
+                    }
+                }
+        );
     }
 
     private void deleteSelected() {
@@ -350,31 +362,49 @@ public class BusinessFunctionPanel extends JPanel {
             return;
         }
 
-        try {
-            repository.deleteRecord(record.getId());
-            AppMessages.success(owner, t("message.delete.success"));
-            reload();
-        } catch (SQLException e) {
-            AppLogger.error("Function record delete failed.", e);
-            AppMessages.error(owner, t("message.error.title"), t("message.delete.failed"));
-        }
+        BackgroundTasks.run(
+                owner,
+                "Function record delete failed.",
+                t("message.error.title"),
+                t("message.delete.failed"),
+                new BackgroundTasks.Work<Void>() {
+                    @Override
+                    public Void run() throws Exception {
+                        repository.deleteRecord(record.getId());
+                        return null;
+                    }
+                },
+                new BackgroundTasks.Success<Void>() {
+                    @Override
+                    public void accept(Void value) {
+                        AppMessages.success(owner, t("message.delete.success"));
+                        reload();
+                    }
+                }
+        );
     }
 
     private void reload() {
-        try {
-            records.clear();
-            records.addAll(repository.loadRecords(function.getCode(), definition.getTableRows()));
-            rebuildTable();
-        } catch (SQLException e) {
-            AppLogger.error("Function record load failed.", e);
-            records.clear();
-            String[][] seedRows = definition.getTableRows();
-            for (int i = 0; i < seedRows.length; i++) {
-                records.add(new FunctionRecord(-1, function.getCode(), seedRows[i]));
-            }
-            rebuildTable();
-            AppMessages.error(owner, t("message.error.title"), t("message.refresh.failed"));
-        }
+        BackgroundTasks.run(
+                owner,
+                "Function record load failed.",
+                t("message.error.title"),
+                t("message.refresh.failed"),
+                new BackgroundTasks.Work<List<FunctionRecord>>() {
+                    @Override
+                    public List<FunctionRecord> run() throws Exception {
+                        return repository.loadRecords(function.getCode(), definition.getTableRows());
+                    }
+                },
+                new BackgroundTasks.Success<List<FunctionRecord>>() {
+                    @Override
+                    public void accept(List<FunctionRecord> loaded) {
+                        records.clear();
+                        records.addAll(loaded);
+                        rebuildTable();
+                    }
+                }
+        );
     }
 
     private void rebuildTable() {

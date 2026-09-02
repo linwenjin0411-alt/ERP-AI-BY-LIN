@@ -1283,19 +1283,28 @@ public class MainFrame extends JFrame {
 
     private void refreshFromDatabase() {
         logUserAction("PAGE_REFRESH_START", "source=database");
-        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        try {
-            reloadModulesKeepingCurrent();
-            refreshTexts();
-            logUserAction("PAGE_REFRESH_SUCCESS", "source=database");
-            AppMessages.info(this, t("message.refresh.done"));
-        } catch (SQLException e) {
-            AppLogger.error("Refresh failed.", e);
-            logUserAction("PAGE_REFRESH_FAILURE", "errorType=" + e.getClass().getSimpleName());
-            AppMessages.error(this, t("message.error.title"), t("message.refresh.failed"));
-        } finally {
-            setCursor(Cursor.getDefaultCursor());
-        }
+        final String currentCode = moduleCode(currentModule);
+        BackgroundTasks.run(
+                this,
+                "Refresh failed.",
+                t("message.error.title"),
+                t("message.refresh.failed"),
+                new BackgroundTasks.Work<List<ModulePageData>>() {
+                    @Override
+                    public List<ModulePageData> run() throws Exception {
+                        return moduleRepository.loadModules();
+                    }
+                },
+                new BackgroundTasks.Success<List<ModulePageData>>() {
+                    @Override
+                    public void accept(List<ModulePageData> reloaded) {
+                        applyReloadedModules(currentCode, reloaded);
+                        refreshTexts();
+                        logUserAction("PAGE_REFRESH_SUCCESS", "source=database");
+                        AppMessages.info(MainFrame.this, t("message.refresh.done"));
+                    }
+                }
+        );
     }
 
     private void openRecordForm(boolean editMode) {
@@ -1348,32 +1357,40 @@ public class MainFrame extends JFrame {
             return;
         }
 
-        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        try {
-            if (editMode) {
-                int sortOrder = currentModule.getTableRowSortOrders().get(modelRow).intValue();
-                logUserAction("FORM_SAVE_SUBMIT", "mode=EDIT | sortOrder=" + sortOrder + " | record=" + values[0]);
-                moduleRepository.updateTableRow(currentModule.getCode(), sortOrder, values);
-                AppLogger.info("Updated ERP row. Module: " + currentModule.getCode() + ", sortOrder: " + sortOrder);
-                logUserAction("FORM_SAVE_SUCCESS", "mode=EDIT | sortOrder=" + sortOrder + " | record=" + values[0]);
-                AppMessages.success(this, t("message.edit.success"));
-            } else {
-                logUserAction("FORM_SAVE_SUBMIT", "mode=CREATE | record=" + values[0]);
-                int sortOrder = moduleRepository.insertTableRow(currentModule.getCode(), values);
-                AppLogger.info("Created ERP row. Module: " + currentModule.getCode() + ", sortOrder: " + sortOrder);
-                logUserAction("FORM_SAVE_SUCCESS", "mode=CREATE | sortOrder=" + sortOrder + " | record=" + values[0]);
-                AppMessages.success(this, t("message.create.success"));
-            }
-            reloadModulesKeepingCurrent();
-            refreshTexts();
-        } catch (SQLException e) {
-            AppLogger.error("Save failed.", e);
-            logUserAction("FORM_SAVE_FAILURE", "mode=" + (editMode ? "EDIT" : "CREATE")
-                    + " | errorType=" + e.getClass().getSimpleName());
-            AppMessages.error(this, t("message.error.title"), t("message.save.failed"));
-        } finally {
-            setCursor(Cursor.getDefaultCursor());
-        }
+        final ModulePageData targetModule = currentModule;
+        final int targetRow = modelRow;
+        BackgroundTasks.run(
+                this,
+                "Save failed.",
+                t("message.error.title"),
+                t("message.save.failed"),
+                new BackgroundTasks.Work<List<ModulePageData>>() {
+                    @Override
+                    public List<ModulePageData> run() throws Exception {
+                        if (editMode) {
+                            int sortOrder = targetModule.getTableRowSortOrders().get(targetRow).intValue();
+                            logUserAction("FORM_SAVE_SUBMIT", "mode=EDIT | sortOrder=" + sortOrder + " | record=" + values[0]);
+                            moduleRepository.updateTableRow(targetModule.getCode(), sortOrder, values);
+                            AppLogger.info("Updated ERP row. Module: " + targetModule.getCode() + ", sortOrder: " + sortOrder);
+                            logUserAction("FORM_SAVE_SUCCESS", "mode=EDIT | sortOrder=" + sortOrder + " | record=" + values[0]);
+                        } else {
+                            logUserAction("FORM_SAVE_SUBMIT", "mode=CREATE | record=" + values[0]);
+                            int sortOrder = moduleRepository.insertTableRow(targetModule.getCode(), values);
+                            AppLogger.info("Created ERP row. Module: " + targetModule.getCode() + ", sortOrder: " + sortOrder);
+                            logUserAction("FORM_SAVE_SUCCESS", "mode=CREATE | sortOrder=" + sortOrder + " | record=" + values[0]);
+                        }
+                        return moduleRepository.loadModules();
+                    }
+                },
+                new BackgroundTasks.Success<List<ModulePageData>>() {
+                    @Override
+                    public void accept(List<ModulePageData> reloaded) {
+                        applyReloadedModules(targetModule.getCode(), reloaded);
+                        refreshTexts();
+                        AppMessages.success(MainFrame.this, editMode ? t("message.edit.success") : t("message.create.success"));
+                    }
+                }
+        );
     }
 
     private void runStatusAction(String actionKey) {
@@ -1405,29 +1422,39 @@ public class MainFrame extends JFrame {
             return;
         }
 
-        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        try {
-            int sortOrder = currentModule.getTableRowSortOrders().get(modelRow).intValue();
-            logUserAction("WORKFLOW_ACTION_SUBMIT", "action=" + actionKey
-                    + " | sortOrder=" + sortOrder
-                    + " | record=" + selectedRecordName(modelRow)
-                    + " | targetStatus=" + english(targetStatus));
-            moduleRepository.updateTableRowStatus(currentModule.getCode(), sortOrder, statusColumnIndex, targetStatus);
-            AppLogger.info("Updated ERP row status. Module: " + currentModule.getCode()
-                    + ", sortOrder: " + sortOrder + ", status: " + targetStatus);
-            reloadModulesKeepingCurrent();
-            refreshTexts();
-            logUserAction("WORKFLOW_ACTION_SUCCESS", "action=" + actionKey
-                    + " | sortOrder=" + sortOrder
-                    + " | targetStatus=" + english(targetStatus));
-            AppMessages.success(this, successMessageFor(actionKey));
-        } catch (SQLException e) {
-            AppLogger.error("Status update failed.", e);
-            logUserAction("WORKFLOW_ACTION_FAILURE", "action=" + actionKey + " | errorType=" + e.getClass().getSimpleName());
-            AppMessages.error(this, t("message.error.title"), t("message.status.failed"));
-        } finally {
-            setCursor(Cursor.getDefaultCursor());
-        }
+        final ModulePageData targetModule = currentModule;
+        final int targetRow = modelRow;
+        BackgroundTasks.run(
+                this,
+                "Status update failed.",
+                t("message.error.title"),
+                t("message.status.failed"),
+                new BackgroundTasks.Work<List<ModulePageData>>() {
+                    @Override
+                    public List<ModulePageData> run() throws Exception {
+                        int sortOrder = targetModule.getTableRowSortOrders().get(targetRow).intValue();
+                        logUserAction("WORKFLOW_ACTION_SUBMIT", "action=" + actionKey
+                                + " | sortOrder=" + sortOrder
+                                + " | record=" + selectedRecordName(targetRow)
+                                + " | targetStatus=" + english(targetStatus));
+                        moduleRepository.updateTableRowStatus(targetModule.getCode(), sortOrder, statusColumnIndex, targetStatus);
+                        AppLogger.info("Updated ERP row status. Module: " + targetModule.getCode()
+                                + ", sortOrder: " + sortOrder + ", status: " + targetStatus);
+                        return moduleRepository.loadModules();
+                    }
+                },
+                new BackgroundTasks.Success<List<ModulePageData>>() {
+                    @Override
+                    public void accept(List<ModulePageData> reloaded) {
+                        applyReloadedModules(targetModule.getCode(), reloaded);
+                        refreshTexts();
+                        logUserAction("WORKFLOW_ACTION_SUCCESS", "action=" + actionKey
+                                + " | row=" + targetRow
+                                + " | targetStatus=" + english(targetStatus));
+                        AppMessages.success(MainFrame.this, successMessageFor(actionKey));
+                    }
+                }
+        );
     }
 
     private void exportCurrentTable() {
@@ -1503,6 +1530,10 @@ public class MainFrame extends JFrame {
     private void reloadModulesKeepingCurrent() throws SQLException {
         String currentCode = currentModule == null ? null : currentModule.getCode();
         List<ModulePageData> reloaded = moduleRepository.loadModules();
+        applyReloadedModules(currentCode, reloaded);
+    }
+
+    private void applyReloadedModules(String currentCode, List<ModulePageData> reloaded) {
         modules.clear();
         modules.addAll(reloaded);
 
