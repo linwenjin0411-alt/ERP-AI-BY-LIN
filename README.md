@@ -40,7 +40,7 @@ Double-click LinovaOneERP.exe
 
 Daily desktop use should start from `LinovaOneERP.exe`. It launches `run.bat` in the background without opening a command window.
 
-When `LinovaOneERP.exe` is opened, the launcher runs Maven in the background, builds `target/linova-one-erp.jar`, then starts the desktop app with `javaw`.
+When `LinovaOneERP.exe` is opened, the launcher starts the existing `target/linova-one-erp.jar` with `javaw`. It does not run Maven during daily startup.
 
 Maintenance command-line startup:
 
@@ -205,7 +205,7 @@ Runtime dependencies are managed by Maven:
 pom.xml
 ```
 
-Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored by Git. After cloning, install JDK and Maven, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
+Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored by Git. After cloning, install JDK and Maven, run `run.bat --compile-only` on a build machine, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
 
 ## Modules
 
@@ -228,5 +228,5 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - `config/db.properties`, `config/license.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
 - `LinovaOneERP.exe` starts `run.bat` hidden, so no command window is shown for daily desktop use.
-- `run.bat` builds with Maven, starts the app, and still supports `--compile-only`, `--init-db`, and `--diagnose-login` for maintenance.
+- `run.bat` starts the existing jar for daily use and only builds with Maven when `--compile-only` is specified; it still supports `--init-db` and `--diagnose-login` for maintenance.
 - The application icon is loaded from `src/main/resources/com/lin/erp/ui/app-icon.png`, and the Windows launcher embeds the matching `launcher/LinovaOneERP.ico`.

@@ -4,13 +4,15 @@ cd /d "%~dp0"
 set "APP_JAR=target\linova-one-erp.jar"
 set "MAVEN_REPO=build\maven-repository"
 
-call :build_app
-if errorlevel 1 exit /b 1
-
 if /i "%~1"=="--compile-only" (
+  call :build_app
+  if errorlevel 1 exit /b 1
   echo Compile finished.
   exit /b 0
 )
+
+call :ensure_app_jar
+if errorlevel 1 exit /b 1
 
 if /i "%~1"=="--init-db" (
   echo Initializing Linova One ERP database...
@@ -45,6 +47,12 @@ if errorlevel 1 (
 
 endlocal
 exit /b 0
+
+:ensure_app_jar
+if exist "%APP_JAR%" exit /b 0
+echo [ERROR] Application jar was not found: %APP_JAR%
+echo Run run.bat --compile-only on a build machine before starting the ERP client.
+exit /b 1
 
 :build_app
 where mvn >nul 2>nul
