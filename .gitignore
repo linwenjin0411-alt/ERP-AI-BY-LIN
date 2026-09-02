@@ -4,6 +4,7 @@ dependency-reduced-pom.xml
 *.class
 *.jar
 config/db.properties
+config/license.properties
 config/*.local.properties
 lib/*.jar
 logs/
@@ -17,3 +18,5 @@ database/*.data.sql
 *.sqlite
 *.sqlite3
 *.db
+rule/
+data/
