@@ -72,6 +72,9 @@ public final class I18n {
         put("message.delete.success", "Deleted successfully.", "删除成功。", "削除しました。");
         put("message.delete.failed", "Delete failed. See the app log for details.", "删除失败，请查看应用日志。", "削除に失敗しました。アプリログを確認してください。");
         put("message.delete.confirm", "Delete selected record", "删除所选记录", "選択したレコードを削除します");
+        put("message.permission.denied", "You do not have permission to perform this action.",
+                "您没有权限执行此操作。",
+                "この操作を実行する権限がありません。");
         put("message.item.required", "Item code and item name are required.", "品目编号和品目名称为必填项。", "品目コードと品目名は必須です。");
         put("license.prompt.title", "License required", "需要许可证", "ライセンスが必要です");
         put("license.prompt.message", "Enter a signed license key. Format: LINOVA-yyyyMMdd-signature.",

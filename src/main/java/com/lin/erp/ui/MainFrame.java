@@ -5,8 +5,10 @@ import com.lin.erp.config.DbConfig;
 import com.lin.erp.db.DbItemMasterRepository;
 import com.lin.erp.db.DbMenuRepository;
 import com.lin.erp.db.DbModuleRepository;
+import com.lin.erp.db.DbRoleMenuPermissionRepository;
 import com.lin.erp.db.MenuNode;
 import com.lin.erp.db.ModulePageData;
+import com.lin.erp.db.RoleMenuPermission;
 import com.lin.erp.i18n.I18n;
 import com.lin.erp.i18n.Language;
 import com.lin.erp.logging.AppLogger;
@@ -69,7 +71,9 @@ public class MainFrame extends JFrame {
     private final DbModuleRepository moduleRepository;
     private final DbMenuRepository menuRepository;
     private final DbItemMasterRepository itemMasterRepository;
+    private final DbRoleMenuPermissionRepository permissionRepository;
     private final Map<String, List<MenuNode>> childMenusByModule = new LinkedHashMap<String, List<MenuNode>>();
+    private final Map<String, RoleMenuPermission> modulePermissions = new LinkedHashMap<String, RoleMenuPermission>();
 
     private ModulePageData currentModule;
     private MenuNode currentSubMenu;
@@ -96,6 +100,7 @@ public class MainFrame extends JFrame {
         this.moduleRepository = new DbModuleRepository(DbConfig.loadDefault());
         this.menuRepository = new DbMenuRepository(DbConfig.loadDefault());
         this.itemMasterRepository = new DbItemMasterRepository(DbConfig.loadDefault());
+        this.permissionRepository = new DbRoleMenuPermissionRepository(DbConfig.loadDefault());
         initializeFrame();
     }
 
@@ -105,6 +110,7 @@ public class MainFrame extends JFrame {
         this.moduleRepository = new DbModuleRepository(DbConfig.loadDefault());
         this.menuRepository = new DbMenuRepository(DbConfig.loadDefault());
         this.itemMasterRepository = new DbItemMasterRepository(DbConfig.loadDefault());
+        this.permissionRepository = new DbRoleMenuPermissionRepository(DbConfig.loadDefault());
         initializeFrame();
     }
 
@@ -1196,6 +1202,11 @@ public class MainFrame extends JFrame {
                     BorderFactory.createLineBorder(i == 0 ? AppTheme.ACCENT : AppTheme.BORDER),
                     AppTheme.emptyBorder(9, 15, 9, 15)
             ));
+            boolean allowed = isToolbarActionAllowed(actionKey);
+            button.setEnabled(allowed);
+            if (!allowed) {
+                button.setToolTipText(t("message.permission.denied"));
+            }
             button.addActionListener(new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
@@ -1209,6 +1220,9 @@ public class MainFrame extends JFrame {
 
     private void handleToolbarAction(String actionKey) {
         logUserAction("TOOLBAR_ACTION_CLICK", "action=" + actionKey + " | actionName=" + english(actionKey));
+        if (!ensureToolbarActionAllowed(actionKey)) {
+            return;
+        }
         if ("action.refresh".equals(actionKey)) {
             refreshFromDatabase();
         } else if ("action.new".equals(actionKey)) {
@@ -1227,6 +1241,43 @@ public class MainFrame extends JFrame {
             askAiAssistant();
         } else {
             AppMessages.success(this, t("message.operation.success"));
+        }
+    }
+
+    private boolean ensureToolbarActionAllowed(String actionKey) {
+        if (isToolbarActionAllowed(actionKey)) {
+            return true;
+        }
+        logUserAction("TOOLBAR_ACTION_DENIED", "module=" + moduleCode(currentModule) + " | action=" + actionKey);
+        AppMessages.error(this, t("message.error.title"), t("message.permission.denied"));
+        return false;
+    }
+
+    private boolean isToolbarActionAllowed(String actionKey) {
+        return currentModulePermission().allows(actionKey);
+    }
+
+    private RoleMenuPermission currentModulePermission() {
+        if (currentModule == null) {
+            return RoleMenuPermission.viewOnly("NONE");
+        }
+        String moduleCode = currentModule.getCode();
+        if (isAlwaysVisibleModule(currentModule)) {
+            return RoleMenuPermission.viewOnly(moduleCode);
+        }
+        RoleMenuPermission cached = modulePermissions.get(moduleCode);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            RoleMenuPermission permission = permissionRepository.loadForModule(session.getRoleCode(), moduleCode);
+            modulePermissions.put(moduleCode, permission);
+            return permission;
+        } catch (SQLException e) {
+            AppLogger.error("Module permission load failed.", e);
+            RoleMenuPermission viewOnly = RoleMenuPermission.viewOnly(moduleCode);
+            modulePermissions.put(moduleCode, viewOnly);
+            return viewOnly;
         }
     }
 

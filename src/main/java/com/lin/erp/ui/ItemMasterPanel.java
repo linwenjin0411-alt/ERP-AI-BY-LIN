@@ -1,8 +1,11 @@
 package com.lin.erp.ui;
 
 import com.lin.erp.auth.UserSession;
+import com.lin.erp.config.DbConfig;
 import com.lin.erp.db.DbItemMasterRepository;
+import com.lin.erp.db.DbRoleMenuPermissionRepository;
 import com.lin.erp.db.ItemMasterRecord;
+import com.lin.erp.db.RoleMenuPermission;
 import com.lin.erp.i18n.I18n;
 import com.lin.erp.i18n.Language;
 import com.lin.erp.logging.AppLogger;
@@ -51,6 +54,7 @@ public class ItemMasterPanel extends JPanel {
     private final Window owner;
     private final UserSession session;
     private final DbItemMasterRepository repository;
+    private final RoleMenuPermission permission;
     private final List<ItemMasterRecord> records = new ArrayList<ItemMasterRecord>();
 
     private JTable table;
@@ -65,6 +69,7 @@ public class ItemMasterPanel extends JPanel {
         this.owner = owner;
         this.session = session;
         this.repository = repository;
+        this.permission = loadPermission();
         setOpaque(false);
         add(createToolbar(), BorderLayout.NORTH);
         add(createBody(), BorderLayout.CENTER);
@@ -114,6 +119,11 @@ public class ItemMasterPanel extends JPanel {
         } else {
             button.setBackground(Color.WHITE);
             button.setForeground(AppTheme.TEXT_PRIMARY);
+        }
+        boolean allowed = permission.allows(actionKey);
+        button.setEnabled(allowed);
+        if (!allowed) {
+            button.setToolTipText(t("message.permission.denied"));
         }
         button.addActionListener(new ActionListener() {
             @Override
@@ -222,6 +232,9 @@ public class ItemMasterPanel extends JPanel {
 
     private void handleAction(String actionKey) {
         logAction("ITEM_MASTER_ACTION_CLICK", "action=" + actionKey + " | actionName=" + english(actionKey));
+        if (!ensureActionAllowed(actionKey)) {
+            return;
+        }
         if ("action.new".equals(actionKey)) {
             openForm(false);
         } else if ("action.edit".equals(actionKey)) {
@@ -232,6 +245,24 @@ public class ItemMasterPanel extends JPanel {
             reload();
         } else if ("action.export".equals(actionKey)) {
             export();
+        }
+    }
+
+    private boolean ensureActionAllowed(String actionKey) {
+        if (permission.allows(actionKey)) {
+            return true;
+        }
+        logAction("ITEM_ACTION_DENIED", "action=" + actionKey);
+        AppMessages.error(this, t("message.error.title"), t("message.permission.denied"));
+        return false;
+    }
+
+    private RoleMenuPermission loadPermission() {
+        try {
+            return new DbRoleMenuPermissionRepository(DbConfig.loadDefault()).loadForMenu(session.getRoleCode(), "MASTER_ITEM");
+        } catch (SQLException e) {
+            AppLogger.error("Item master permission load failed.", e);
+            return RoleMenuPermission.viewOnly("MASTER_ITEM");
         }
     }
 

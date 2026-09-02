@@ -3,8 +3,10 @@ package com.lin.erp.ui;
 import com.lin.erp.auth.UserSession;
 import com.lin.erp.config.DbConfig;
 import com.lin.erp.db.DbFunctionRecordRepository;
+import com.lin.erp.db.DbRoleMenuPermissionRepository;
 import com.lin.erp.db.FunctionRecord;
 import com.lin.erp.db.MenuNode;
+import com.lin.erp.db.RoleMenuPermission;
 import com.lin.erp.i18n.I18n;
 import com.lin.erp.i18n.Language;
 import com.lin.erp.logging.AppLogger;
@@ -50,6 +52,7 @@ public class BusinessFunctionPanel extends JPanel {
     private final MenuNode function;
     private final BusinessFunctionDefinition definition;
     private final DbFunctionRecordRepository repository;
+    private final RoleMenuPermission permission;
     private final List<FunctionRecord> records = new ArrayList<FunctionRecord>();
 
     private JTable table;
@@ -66,6 +69,7 @@ public class BusinessFunctionPanel extends JPanel {
         this.function = function;
         this.definition = BusinessFunctionCatalog.forFunction(function);
         this.repository = new DbFunctionRecordRepository(DbConfig.loadDefault());
+        this.permission = loadPermission(function.getCode());
         setOpaque(false);
         add(createToolbar(), BorderLayout.NORTH);
         add(createBody(), BorderLayout.CENTER);
@@ -115,6 +119,11 @@ public class BusinessFunctionPanel extends JPanel {
         } else {
             button.setBackground(Color.WHITE);
             button.setForeground(AppTheme.TEXT_PRIMARY);
+        }
+        boolean allowed = permission.allows(actionKey);
+        button.setEnabled(allowed);
+        if (!allowed) {
+            button.setToolTipText(t("message.permission.denied"));
         }
         button.addActionListener(new ActionListener() {
             @Override
@@ -239,6 +248,9 @@ public class BusinessFunctionPanel extends JPanel {
 
     private void handleAction(String actionKey) {
         logAction("FUNCTION_ACTION_CLICK", "function=" + function.getCode() + " | action=" + english(actionKey));
+        if (!ensureActionAllowed(actionKey)) {
+            return;
+        }
         if ("action.new".equals(actionKey)) {
             openForm(false);
         } else if ("action.edit".equals(actionKey)) {
@@ -250,6 +262,26 @@ public class BusinessFunctionPanel extends JPanel {
             AppMessages.info(owner, t("message.refresh.done"));
         } else if ("action.export".equals(actionKey)) {
             export();
+        }
+    }
+
+    private boolean ensureActionAllowed(String actionKey) {
+        if (permission.allows(actionKey)) {
+            return true;
+        }
+        logAction("FUNCTION_ACTION_DENIED", "function=" + function.getCode()
+                + " | action=" + actionKey
+                + " | permissionScope=" + permission.getScopeCode());
+        AppMessages.error(owner, t("message.error.title"), t("message.permission.denied"));
+        return false;
+    }
+
+    private RoleMenuPermission loadPermission(String menuCode) {
+        try {
+            return new DbRoleMenuPermissionRepository(DbConfig.loadDefault()).loadForMenu(session.getRoleCode(), menuCode);
+        } catch (SQLException e) {
+            AppLogger.error("Function permission load failed.", e);
+            return RoleMenuPermission.viewOnly(menuCode);
         }
     }
 
