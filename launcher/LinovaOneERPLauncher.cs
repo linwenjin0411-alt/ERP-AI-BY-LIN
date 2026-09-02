@@ -4,6 +4,12 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
 
+[assembly: AssemblyTitle("Linova One ERP")]
+[assembly: AssemblyProduct("Linova One ERP")]
+[assembly: AssemblyCompany("Linova")]
+[assembly: AssemblyFileVersion("1.0.0.3")]
+[assembly: AssemblyInformationalVersion("1.0.0.3")]
+
 public static class LinovaOneERPLauncher
 {
     [STAThread]

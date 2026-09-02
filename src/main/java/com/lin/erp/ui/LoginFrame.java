@@ -3,6 +3,9 @@ package com.lin.erp.ui;
 import com.lin.erp.auth.AuthException;
 import com.lin.erp.auth.AuthService;
 import com.lin.erp.auth.UserSession;
+import com.lin.erp.config.DbConfig;
+import com.lin.erp.db.DbLicenseRepository;
+import com.lin.erp.db.LicenseStatus;
 import com.lin.erp.db.ModulePageData;
 import com.lin.erp.i18n.I18n;
 import com.lin.erp.i18n.Language;
@@ -17,6 +20,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JOptionPane;
 import javax.swing.SwingWorker;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
@@ -42,9 +46,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.List;
+import java.sql.SQLException;
 
 public class LoginFrame extends JFrame {
     private final AuthService authService;
+    private final DbLicenseRepository licenseRepository;
     private final List<JLabel> capabilityLabels = new ArrayList<JLabel>();
 
     private Language language = I18n.DEFAULT_LANGUAGE;
@@ -69,6 +75,7 @@ public class LoginFrame extends JFrame {
 
     public LoginFrame(AuthService authService) {
         this.authService = authService;
+        this.licenseRepository = new DbLicenseRepository(DbConfig.loadDefault());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setIconImages(AppIcon.images());
         setMinimumSize(new Dimension(1040, 650));
@@ -383,6 +390,10 @@ public class LoginFrame extends JFrame {
                     LoginResult result = get();
                     AppLogger.info("Sign-in succeeded for user: " + result.session.getUsername());
                     AppLogger.userAction("LOGIN_SUCCESS", "username=" + result.session.getUsername());
+                    if (!ensureLicense(result.session)) {
+                        setLoginEnabled(true);
+                        return;
+                    }
                     MainFrame mainFrame = new MainFrame(result.session, result.modules);
                     mainFrame.setVisible(true);
                     AppMessages.success(mainFrame, I18n.t(result.session.getLanguage(), "message.login.success"));
@@ -413,6 +424,51 @@ public class LoginFrame extends JFrame {
         passwordField.selectAll();
         passwordField.requestFocusInWindow();
         setLoginEnabled(true);
+    }
+
+    private boolean ensureLicense(UserSession session) {
+        try {
+            LicenseStatus status = licenseRepository.currentStatus();
+            if (status.isValid()) {
+                AppLogger.userAction("LICENSE_VALID", "username=" + session.getUsername()
+                        + " | validUntil=" + status.getValidUntil());
+                return true;
+            }
+        } catch (SQLException e) {
+            AppLogger.error("License check failed.", e);
+            AppMessages.error(this, I18n.t(language, "message.error.title"), I18n.t(language, "license.check.failed"));
+            return false;
+        }
+
+        while (true) {
+            String key = JOptionPane.showInputDialog(
+                    this,
+                    I18n.t(language, "license.prompt.message"),
+                    I18n.t(language, "license.prompt.title"),
+                    JOptionPane.WARNING_MESSAGE
+            );
+            if (key == null) {
+                AppLogger.userAction("LICENSE_INPUT_CANCEL", "username=" + session.getUsername());
+                messageLabel.setText(I18n.t(language, "license.required"));
+                messageLabel.setForeground(AppTheme.ERROR);
+                return false;
+            }
+            try {
+                LicenseStatus registered = licenseRepository.registerLicense(key);
+                if (registered.isValid()) {
+                    AppLogger.userAction("LICENSE_REGISTER_SUCCESS", "username=" + session.getUsername()
+                            + " | validUntil=" + registered.getValidUntil());
+                    AppMessages.success(this, I18n.t(language, "license.register.success")
+                            + registered.getValidUntil());
+                    return true;
+                }
+                AppMessages.error(this, I18n.t(language, "message.error.title"), I18n.t(language, "license.invalid"));
+            } catch (SQLException e) {
+                AppLogger.error("License registration failed.", e);
+                AppMessages.error(this, I18n.t(language, "message.error.title"), I18n.t(language, "license.save.failed"));
+                return false;
+            }
+        }
     }
 
     private void setLoginEnabled(boolean enabled) {
