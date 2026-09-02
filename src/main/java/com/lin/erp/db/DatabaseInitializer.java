@@ -52,24 +52,96 @@ public class DatabaseInitializer {
             throw new SQLException("Failed to read database/schema.mysql.sql: " + e.getMessage(), e);
         }
 
-        StringBuilder cleaned = new StringBuilder();
-        String[] lines = sql.split("\\r?\\n");
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("--") || trimmed.length() == 0) {
+        return splitSqlStatements(sql);
+    }
+
+    private List<String> splitSqlStatements(String sql) {
+        List<String> statements = new ArrayList<String>();
+        StringBuilder current = new StringBuilder();
+        String delimiter = ";";
+        boolean singleQuote = false;
+        boolean doubleQuote = false;
+        boolean backtick = false;
+        boolean blockComment = false;
+
+        String[] lines = sql.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
+        for (String rawLine : lines) {
+            String trimmed = rawLine.trim();
+            if (!singleQuote && !doubleQuote && !backtick && !blockComment
+                    && trimmed.toUpperCase().startsWith("DELIMITER ")) {
+                delimiter = trimmed.substring("DELIMITER ".length()).trim();
+                if (delimiter.length() == 0) {
+                    delimiter = ";";
+                }
                 continue;
             }
-            cleaned.append(line).append('\n');
-        }
 
-        List<String> statements = new ArrayList<String>();
-        String[] parts = cleaned.toString().split(";");
-        for (String part : parts) {
-            String statement = part.trim();
-            if (statement.length() > 0) {
-                statements.add(statement);
+            String line = rawLine + "\n";
+            int index = 0;
+            while (index < line.length()) {
+                if (!singleQuote && !doubleQuote && !backtick) {
+                    if (blockComment) {
+                        int end = line.indexOf("*/", index);
+                        if (end < 0) {
+                            break;
+                        }
+                        blockComment = false;
+                        index = end + 2;
+                        continue;
+                    }
+                    if (line.startsWith("/*", index)) {
+                        blockComment = true;
+                        index += 2;
+                        continue;
+                    }
+                    if (line.charAt(index) == '#'
+                            || (line.startsWith("--", index) && isLineComment(line, index))) {
+                        break;
+                    }
+                    if (line.startsWith(delimiter, index)) {
+                        addStatement(statements, current);
+                        index += delimiter.length();
+                        continue;
+                    }
+                }
+
+                char ch = line.charAt(index);
+                current.append(ch);
+
+                if (!doubleQuote && !backtick && ch == '\'' && !isEscaped(line, index)) {
+                    singleQuote = !singleQuote;
+                } else if (!singleQuote && !backtick && ch == '"' && !isEscaped(line, index)) {
+                    doubleQuote = !doubleQuote;
+                } else if (!singleQuote && !doubleQuote && ch == '`') {
+                    backtick = !backtick;
+                }
+                index++;
             }
         }
+        addStatement(statements, current);
         return statements;
+    }
+
+    private void addStatement(List<String> statements, StringBuilder current) {
+        String statement = current.toString().trim();
+        if (statement.length() > 0) {
+            statements.add(statement);
+        }
+        current.setLength(0);
+    }
+
+    private boolean isLineComment(String line, int index) {
+        int next = index + 2;
+        return next >= line.length() || Character.isWhitespace(line.charAt(next));
+    }
+
+    private boolean isEscaped(String line, int index) {
+        int slashCount = 0;
+        int cursor = index - 1;
+        while (cursor >= 0 && line.charAt(cursor) == '\\') {
+            slashCount++;
+            cursor--;
+        }
+        return slashCount % 2 == 1;
     }
 }
