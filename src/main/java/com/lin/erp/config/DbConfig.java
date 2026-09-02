@@ -5,6 +5,9 @@ import com.lin.erp.logging.AppLogger;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.IDN;
+import java.net.URLEncoder;
 import java.util.Properties;
 
 public class DbConfig {
@@ -75,12 +78,12 @@ public class DbConfig {
     }
 
     public String jdbcUrl() {
-        return "jdbc:mysql://" + host + ":" + port + "/" + database
+        return "jdbc:mysql://" + jdbcHost() + ":" + port + "/" + urlEncode(database)
                 + "?useUnicode=true"
                 + "&characterEncoding=utf8"
                 + "&useSSL=" + useSsl
                 + "&allowPublicKeyRetrieval=" + allowPublicKeyRetrieval
-                + "&serverTimezone=" + serverTimezone
+                + "&serverTimezone=" + urlEncode(serverTimezone)
                 + "&connectTimeout=" + connectTimeoutMs
                 + "&socketTimeout=" + socketTimeoutMs;
     }
@@ -97,6 +100,24 @@ public class DbConfig {
             return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
             return fallback;
+        }
+    }
+
+    private String jdbcHost() {
+        if (host.startsWith("[") && host.endsWith("]")) {
+            return host;
+        }
+        if (host.indexOf(':') >= 0) {
+            return "[" + host + "]";
+        }
+        return IDN.toASCII(host);
+    }
+
+    private String urlEncode(String value) {
+        try {
+            return URLEncoder.encode(value, "UTF-8").replace("+", "%20");
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalStateException("UTF-8 is not available.", e);
         }
     }
 }
