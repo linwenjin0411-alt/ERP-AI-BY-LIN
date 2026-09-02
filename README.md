@@ -115,7 +115,7 @@ Example structure only: LINOVA-20271231-<signature>
 
 Expired, malformed, or unsigned keys are rejected, and the login window remains open.
 
-When MySQL is enabled, licenses are stored in `erp_licenses`. When demo mode is used without MySQL, the license is stored locally in `config/license.properties`.
+When MySQL is enabled, licenses are stored in `erp_licenses`. When demo mode is used without MySQL, the license is stored locally in `config/license.properties`. This local license file is ignored by Git and must not be committed.
 
 Administrators can also open `Administration -> Security -> Roles -> License Management` / `系统管理 -> 安全权限 -> 角色 -> 许可证管理` / `システム管理 -> セキュリティ -> ロール -> ライセンス管理` to view the current license status and register a new license.
 
@@ -142,7 +142,7 @@ database: linova_erp
 username: YOUR_DB_USER
 ```
 
-Copy `config/db.properties.example` to `config/db.properties` and fill in real local connection values there. Never commit `config/db.properties`, database dumps, exported CSV files, or runtime logs.
+Copy `config/db.properties.example` to `config/db.properties` and fill in real local connection values there. Never commit `config/db.properties`, `config/license.properties`, database dumps, exported CSV files, or runtime logs.
 
 The schema file is:
 
@@ -225,7 +225,7 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - The left navigation uses a custom Swing button style so the dark ERP menu is not overridden by the Windows native button theme.
 - User authentication now queries MySQL first.
 - `last_login_at` is updated after a successful database login.
-- `config/db.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
+- `config/db.properties`, `config/license.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
 - `LinovaOneERP.exe` starts `run.bat` hidden, so no command window is shown for daily desktop use.
 - `run.bat` builds with Maven, starts the app, and still supports `--compile-only`, `--init-db`, and `--diagnose-login` for maintenance.
