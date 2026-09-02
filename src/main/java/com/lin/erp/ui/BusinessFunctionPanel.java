@@ -10,12 +10,10 @@ import com.lin.erp.i18n.Language;
 import com.lin.erp.logging.AppLogger;
 
 import javax.swing.BorderFactory;
-import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
@@ -59,11 +57,12 @@ public class BusinessFunctionPanel extends JPanel {
     private final DbFunctionRecordRepository repository;
     private final List<FunctionRecord> records = new ArrayList<FunctionRecord>();
     private JTextField[] fields;
-    private final JRadioButton[] modeButtons = new JRadioButton[4];
     private JTable table;
     private DefaultTableModel tableModel;
     private TableRowSorter<DefaultTableModel> sorter;
     private JTextField searchField;
+    private String activeMode = MODE_REFERENCE;
+    private long editingRecordId = -1;
 
     public BusinessFunctionPanel(Window owner, UserSession session, MenuNode function) {
         super(new BorderLayout(0, 14));
@@ -88,32 +87,13 @@ public class BusinessFunctionPanel extends JPanel {
                 AppTheme.emptyBorder(10, 12, 10, 12)
         ));
 
-        JPanel modes = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
-        modes.setOpaque(false);
-        JLabel modeLabel = smallLabel(t("function.operation"));
-        modes.add(modeLabel);
-
-        ButtonGroup group = new ButtonGroup();
-        String[] modeKeys = {MODE_REGISTER, MODE_CORRECT, MODE_CANCEL, MODE_REFERENCE};
-        for (int i = 0; i < modeKeys.length; i++) {
-            final String modeKey = modeKeys[i];
-            JRadioButton radio = new JRadioButton(t(modeKey));
-            radio.setOpaque(false);
-            radio.setForeground(AppTheme.TEXT_PRIMARY);
-            radio.setFont(AppTheme.font(Font.PLAIN, 12));
-            radio.putClientProperty("FlatLaf.style", "focusWidth: 0");
-            radio.setSelected(i == 0);
-            radio.addActionListener(new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    applyMode(modeKey);
-                }
-            });
-            modeButtons[i] = radio;
-            group.add(radio);
-            modes.add(radio);
-        }
-        strip.add(modes, BorderLayout.WEST);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        actions.setOpaque(false);
+        actions.add(createOperationButton("action.new", MODE_REGISTER, true));
+        actions.add(createOperationButton("action.edit", MODE_CORRECT, false));
+        actions.add(createOperationButton("action.delete", MODE_CANCEL, false));
+        actions.add(createOperationButton("action.refresh", MODE_REFERENCE, false));
+        strip.add(actions, BorderLayout.WEST);
 
         JPanel search = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         search.setOpaque(false);
@@ -188,6 +168,7 @@ public class BusinessFunctionPanel extends JPanel {
             fields[i] = new JTextField(i < values.length ? text(values[i]) : "");
             fields[i].setPreferredSize(new Dimension(178, 34));
             styleCompactField(fields[i]);
+            fields[i].setEditable(false);
             form.add(fields[i], gbc);
         }
         return form;
@@ -210,6 +191,11 @@ public class BusinessFunctionPanel extends JPanel {
         table.setBackground(Color.WHITE);
         table.setSelectionBackground(AppTheme.ACCENT_SOFT);
         table.setSelectionForeground(AppTheme.TEXT_PRIMARY);
+        table.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting() && MODE_REFERENCE.equals(activeMode)) {
+                loadSelectedRowIntoForm();
+            }
+        });
         table.getTableHeader().setReorderingAllowed(false);
         table.getTableHeader().setBackground(new Color(248, 250, 252));
         table.getTableHeader().setForeground(AppTheme.TEXT_MUTED);
@@ -225,10 +211,8 @@ public class BusinessFunctionPanel extends JPanel {
     private JPanel createActionFooter() {
         JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         footer.setOpaque(false);
-        footer.add(createActionButton("function.mode.reference"));
-        footer.add(createActionButton("function.mode.cancel"));
-        footer.add(createActionButton("function.mode.correct"));
-        footer.add(createPrimaryActionButton("function.mode.register"));
+        footer.add(createActionButton("form.cancel", "FORM_CANCEL"));
+        footer.add(createPrimaryActionButton("form.save"));
         return footer;
     }
 
@@ -277,18 +261,8 @@ public class BusinessFunctionPanel extends JPanel {
         return button;
     }
 
-    private JButton createActionButton(final String actionKey) {
-        JButton button = new JButton(t(actionKey));
-        button.putClientProperty("JButton.buttonType", "roundRect");
-        button.putClientProperty("FlatLaf.style", "arc: 8; borderWidth: 1; focusWidth: 0");
-        button.setBackground(Color.WHITE);
-        button.setForeground(AppTheme.TEXT_PRIMARY);
-        button.setBorder(new CompoundBorder(
-                BorderFactory.createLineBorder(new Color(213, 222, 235)),
-                AppTheme.emptyBorder(8, 15, 8, 15)
-        ));
-        button.setFocusPainted(false);
-        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+    private JButton createOperationButton(String textKey, final String actionKey, boolean primary) {
+        JButton button = createBaseButton(t(textKey), primary);
         button.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -298,32 +272,107 @@ public class BusinessFunctionPanel extends JPanel {
         return button;
     }
 
-    private JButton createPrimaryActionButton(String actionKey) {
-        JButton button = createActionButton(actionKey);
-        button.setBackground(AppTheme.ACCENT);
-        button.setForeground(Color.WHITE);
+    private JButton createActionButton(String textKey, final String actionKey) {
+        JButton button = createBaseButton(t(textKey), false);
+        button.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if ("FORM_SAVE".equals(actionKey)) {
+                    saveCurrentForm();
+                } else {
+                    cancelEdit();
+                }
+            }
+        });
         return button;
     }
 
+    private JButton createBaseButton(String label, boolean primary) {
+        JButton button = new JButton(label);
+        button.putClientProperty("JButton.buttonType", "roundRect");
+        button.putClientProperty("FlatLaf.style", "arc: 8; borderWidth: 1; focusWidth: 0");
+        button.setText(label);
+        button.setBackground(primary ? AppTheme.ACCENT : Color.WHITE);
+        button.setForeground(primary ? Color.WHITE : AppTheme.TEXT_PRIMARY);
+        button.setBorder(new CompoundBorder(
+                BorderFactory.createLineBorder(primary ? AppTheme.ACCENT : new Color(213, 222, 235)),
+                AppTheme.emptyBorder(8, 15, 8, 15)
+        ));
+        button.setFocusPainted(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return button;
+    }
+
+    private JButton createPrimaryActionButton(String actionKey) {
+        return createActionButton(actionKey, "FORM_SAVE");
+    }
+
     private void runAction(String actionKey) {
-        selectMode(actionKey);
         if (MODE_REGISTER.equals(actionKey)) {
-            createRecord();
+            startCreate();
         } else if (MODE_CORRECT.equals(actionKey)) {
-            updateRecord("status.released", t("message.edit.success"));
+            startEdit();
         } else if (MODE_CANCEL.equals(actionKey)) {
-            updateRecord("status.cancelled", t("message.operation.success"));
+            deleteSelectedRecord();
         } else {
-            loadSelectedRowIntoForm();
+            activeMode = MODE_REFERENCE;
+            editingRecordId = -1;
+            setFieldsEditable(false);
+            reload();
             AppMessages.info(owner, t("message.refresh.done"));
         }
         logAction("GENERIC_FUNCTION_ACTION", "function=" + function.getCode() + " | action=" + actionKey);
     }
 
+    private void startCreate() {
+        activeMode = MODE_REGISTER;
+        editingRecordId = -1;
+        fillFields(definition.getDefaultValues());
+        if (fields.length > 0) {
+            fields[0].setText(defaultDocumentNumber());
+        }
+        setFieldsEditable(true);
+        if (fields.length > 0) {
+            fields[0].requestFocusInWindow();
+        }
+    }
+
+    private void startEdit() {
+        int row = selectedModelRow();
+        if (row < 0) {
+            AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
+            return;
+        }
+        FunctionRecord record = records.get(row);
+        activeMode = MODE_CORRECT;
+        editingRecordId = record.getId();
+        fillFields(recordValuesForForm(record));
+        setFieldsEditable(true);
+        if (fields.length > 0) {
+            fields[0].requestFocusInWindow();
+        }
+    }
+
+    private void saveCurrentForm() {
+        if (MODE_REGISTER.equals(activeMode)) {
+            createRecord();
+        } else if (MODE_CORRECT.equals(activeMode)) {
+            updateRecord(t("message.edit.success"));
+        } else {
+            AppMessages.info(owner, t("message.select.row"));
+        }
+    }
+
     private void createRecord() {
+        if (!validateRequired()) {
+            return;
+        }
         try {
-            repository.createRecord(function.getCode(), newDisplayValues("status.open"));
+            repository.createRecord(function.getCode(), valuesForTable("status.open"));
             reload();
+            activeMode = MODE_REFERENCE;
+            editingRecordId = -1;
+            setFieldsEditable(false);
             AppMessages.success(owner, t("message.create.success"));
         } catch (SQLException e) {
             AppLogger.error("Function record create failed.", e);
@@ -331,20 +380,54 @@ public class BusinessFunctionPanel extends JPanel {
         }
     }
 
-    private void updateRecord(String status, String successMessage) {
+    private void updateRecord(String successMessage) {
+        if (editingRecordId < 0) {
+            AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
+            return;
+        }
+        if (!validateRequired()) {
+            return;
+        }
+        try {
+            repository.updateRecord(editingRecordId, valuesForTable(currentStatusValue()));
+            reload();
+            activeMode = MODE_REFERENCE;
+            editingRecordId = -1;
+            setFieldsEditable(false);
+            AppMessages.success(owner, successMessage);
+        } catch (SQLException e) {
+            AppLogger.error("Function record update failed.", e);
+            AppMessages.error(owner, t("message.error.title"), t("message.save.failed"));
+        }
+    }
+
+    private void deleteSelectedRecord() {
         int row = selectedModelRow();
         if (row < 0) {
             AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
             return;
         }
+        FunctionRecord record = records.get(row);
+        int result = JOptionPane.showConfirmDialog(
+                owner,
+                t("message.delete.confirm") + " " + displayRecordId(record) + " ?",
+                t("dialog.confirm.title"),
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        if (result != JOptionPane.OK_OPTION) {
+            return;
+        }
         try {
-            FunctionRecord record = records.get(row);
-            repository.updateRecord(record.getId(), newDisplayValues(status));
+            repository.deleteRecord(record.getId());
+            activeMode = MODE_REFERENCE;
+            editingRecordId = -1;
+            setFieldsEditable(false);
             reload();
-            AppMessages.success(owner, successMessage);
+            AppMessages.success(owner, t("message.delete.success"));
         } catch (SQLException e) {
-            AppLogger.error("Function record update failed.", e);
-            AppMessages.error(owner, t("message.error.title"), t("message.save.failed"));
+            AppLogger.error("Function record delete failed.", e);
+            AppMessages.error(owner, t("message.error.title"), t("message.delete.failed"));
         }
     }
 
@@ -371,6 +454,12 @@ public class BusinessFunctionPanel extends JPanel {
             rows[i] = localized(records.get(i).getValues());
         }
         tableModel.setDataVector(rows, localized(definition.getTableColumnKeys()));
+        if (records.size() > 0) {
+            table.setRowSelectionInterval(0, 0);
+            loadSelectedRowIntoForm();
+        } else {
+            clearFields();
+        }
     }
 
     private void filterRows() {
@@ -382,21 +471,17 @@ public class BusinessFunctionPanel extends JPanel {
         }
     }
 
-    private void applyMode(String modeKey) {
-        boolean editable = !MODE_REFERENCE.equals(modeKey);
+    private void setFieldsEditable(boolean editable) {
         for (int i = 0; i < fields.length; i++) {
             fields[i].setEditable(editable);
         }
-        loadSelectedRowIntoForm();
-        logAction("GENERIC_FUNCTION_MODE", "function=" + function.getCode() + " | mode=" + modeKey);
     }
 
-    private void selectMode(String modeKey) {
-        String[] modeKeys = {MODE_REGISTER, MODE_CORRECT, MODE_CANCEL, MODE_REFERENCE};
-        for (int i = 0; i < modeKeys.length; i++) {
-            modeButtons[i].setSelected(modeKeys[i].equals(modeKey));
-        }
-        applyMode(modeKey);
+    private void cancelEdit() {
+        activeMode = MODE_REFERENCE;
+        editingRecordId = -1;
+        setFieldsEditable(false);
+        loadSelectedRowIntoForm();
     }
 
     private void loadSelectedRowIntoForm() {
@@ -404,24 +489,10 @@ public class BusinessFunctionPanel extends JPanel {
         if (row < 0) {
             return;
         }
-        if (fields.length > 0) {
-            fields[0].setText(defaultDocumentNumber());
-        }
-        if (fields.length > 2 && tableModel.getColumnCount() > 3) {
-            fields[2].setText(value(row, 3));
-        }
-        if (fields.length > 4 && tableModel.getColumnCount() > 1) {
-            fields[4].setText(value(row, 1));
-        }
-        if (fields.length > 5 && tableModel.getColumnCount() > 2) {
-            fields[5].setText(value(row, 2));
-        }
-        if (fields.length > 8 && tableModel.getColumnCount() > 4) {
-            fields[8].setText(text(function.getNameKey()) + " / " + value(row, 4));
-        }
+        fillFields(recordValuesForForm(records.get(row)));
     }
 
-    private String[] newDisplayValues(String status) {
+    private String[] valuesForTable(String status) {
         String[] columns = definition.getTableColumnKeys();
         String[] values = new String[Math.min(8, columns.length)];
         for (int i = 0; i < values.length; i++) {
@@ -430,9 +501,114 @@ public class BusinessFunctionPanel extends JPanel {
         return values;
     }
 
+    private String[] recordValuesForForm(FunctionRecord record) {
+        String[] formValues = new String[fields.length];
+        String[] defaults = definition.getDefaultValues();
+        for (int i = 0; i < formValues.length; i++) {
+            formValues[i] = i < defaults.length ? text(defaults[i]) : "";
+        }
+
+        String[] columns = definition.getTableColumnKeys();
+        String[] values = record.getValues();
+        for (int i = 0; i < columns.length && i < values.length; i++) {
+            putFormValue(formValues, columns[i], text(values[i]));
+        }
+        return formValues;
+    }
+
+    private void putFormValue(String[] formValues, String columnKey, String value) {
+        int index = fieldIndexForColumn(columnKey);
+        if (index >= 0 && index < formValues.length) {
+            formValues[index] = value == null ? "" : value;
+        }
+    }
+
+    private int fieldIndexForColumn(String columnKey) {
+        String[] fieldKeys = definition.getFieldKeys();
+        for (int i = 0; i < fieldKeys.length; i++) {
+            if (columnKey.equals(fieldKeys[i])) {
+                return i;
+            }
+        }
+        if ("function.table.line".equals(columnKey)) {
+            return 0;
+        }
+        if ("column.id".equals(columnKey) || "license.field.key".equals(columnKey)) {
+            return 0;
+        }
+        if ("column.date".equals(columnKey) || "column.due".equals(columnKey) || "license.field.validFrom".equals(columnKey)) {
+            return 1;
+        }
+        if ("column.status".equals(columnKey)) {
+            return 2;
+        }
+        if ("column.role".equals(columnKey) || "column.type".equals(columnKey) || "column.permission".equals(columnKey)) {
+            return Math.min(2, fields.length - 1);
+        }
+        if ("column.department".equals(columnKey) || "column.scope".equals(columnKey)) {
+            return Math.min(3, fields.length - 1);
+        }
+        if ("column.email".equals(columnKey) || "column.language".equals(columnKey)) {
+            return Math.min(4, fields.length - 1);
+        }
+        if ("column.customer".equals(columnKey) || "column.supplier".equals(columnKey)
+                || "column.name".equals(columnKey) || "function.field.partner".equals(columnKey)) {
+            return "column.name".equals(columnKey) ? Math.min(1, fields.length - 1) : Math.min(3, fields.length - 1);
+        }
+        if ("column.item".equals(columnKey) || "license.field.validUntil".equals(columnKey)) {
+            return Math.min(4, fields.length - 1);
+        }
+        if ("column.qty".equals(columnKey) || "column.amount".equals(columnKey)) {
+            return Math.min(5, fields.length - 1);
+        }
+        if ("column.warehouse".equals(columnKey) || "column.plant".equals(columnKey)) {
+            return Math.min(6, fields.length - 1);
+        }
+        if ("column.owner".equals(columnKey)) {
+            return Math.min(7, fields.length - 1);
+        }
+        if ("column.next".equals(columnKey) || "column.risk".equals(columnKey)) {
+            return Math.min(8, fields.length - 1);
+        }
+        return -1;
+    }
+
+    private void fillFields(String[] values) {
+        for (int i = 0; i < fields.length; i++) {
+            fields[i].setText(i < values.length && values[i] != null ? values[i] : "");
+        }
+    }
+
+    private void clearFields() {
+        for (int i = 0; i < fields.length; i++) {
+            fields[i].setText("");
+        }
+    }
+
+    private boolean validateRequired() {
+        if (fields.length > 0 && fields[0].getText().trim().length() == 0) {
+            AppMessages.error(owner, t("message.error.title"), t("message.id.required"));
+            fields[0].requestFocusInWindow();
+            return false;
+        }
+        return true;
+    }
+
+    private String currentStatusValue() {
+        for (int i = 0; i < definition.getFieldKeys().length && i < fields.length; i++) {
+            if (("function.field.status".equals(definition.getFieldKeys()[i])
+                    || "column.status".equals(definition.getFieldKeys()[i]))
+                    && fields[i].getText().trim().length() > 0) {
+                return fields[i].getText();
+            }
+        }
+        return "status.released";
+    }
+
     private String valueForColumn(String columnKey, int index, String status) {
         if ("function.table.line".equals(columnKey)) {
-            return String.valueOf(records.size() + 1);
+            String line = valueAt(0);
+            return line.trim().length() == 0 ? String.valueOf(records.size() + 1) : line;
         }
         if ("column.id".equals(columnKey)) {
             return valueAt(0);
@@ -443,10 +619,22 @@ public class BusinessFunctionPanel extends JPanel {
         if ("column.status".equals(columnKey)) {
             return status;
         }
-        if ("column.customer".equals(columnKey) || "column.supplier".equals(columnKey) || "column.name".equals(columnKey)) {
+        if ("column.name".equals(columnKey)) {
+            return valueAt(1);
+        }
+        if ("column.role".equals(columnKey) || "column.type".equals(columnKey) || "column.permission".equals(columnKey)) {
+            return valueAt(2);
+        }
+        if ("column.department".equals(columnKey) || "column.scope".equals(columnKey)) {
             return valueAt(3);
         }
-        if ("column.item".equals(columnKey) || "column.type".equals(columnKey)) {
+        if ("column.email".equals(columnKey) || "column.language".equals(columnKey)) {
+            return valueAt(4);
+        }
+        if ("column.customer".equals(columnKey) || "column.supplier".equals(columnKey)) {
+            return valueAt(3);
+        }
+        if ("column.item".equals(columnKey)) {
             return valueAt(4);
         }
         if ("column.qty".equals(columnKey) || "column.amount".equals(columnKey)) {
@@ -517,6 +705,11 @@ public class BusinessFunctionPanel extends JPanel {
             return "";
         }
         return fields[index].getText();
+    }
+
+    private String displayRecordId(FunctionRecord record) {
+        String[] values = record.getValues();
+        return values.length == 0 || values[0] == null || values[0].trim().length() == 0 ? String.valueOf(record.getId()) : text(values[0]);
     }
 
     private String[] localized(String[] values) {

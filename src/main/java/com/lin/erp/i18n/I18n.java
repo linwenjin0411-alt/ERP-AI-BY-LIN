@@ -347,6 +347,12 @@ public final class I18n {
         put("column.id", "ID", "编号", "番号");
         put("column.name", "Name", "名称", "名称");
         put("column.type", "Type", "类型", "タイプ");
+        put("column.role", "Role", "角色", "ロール");
+        put("column.department", "Department", "部门", "部門");
+        put("column.email", "Email", "邮箱", "メール");
+        put("column.language", "Language", "语言", "言語");
+        put("column.permission", "Permission", "权限", "権限");
+        put("column.scope", "Scope", "范围", "範囲");
         put("column.status", "Status", "状态", "ステータス");
         put("column.owner", "Owner", "负责人", "担当者");
         put("column.date", "Date", "日期", "日付");
