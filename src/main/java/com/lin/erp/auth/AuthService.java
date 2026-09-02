@@ -47,7 +47,7 @@ public class AuthService {
 
         if (dbConfig.isEnabled() && !dbConfig.isFallbackToDemo()) {
             AppLogger.warning("Database login unavailable and demo fallback disabled.");
-            throw new AuthException("Database login is unavailable. Check config/db.properties and the MySQL JDBC driver.");
+            throw new AuthException(I18n.t(actualLanguage, "auth.database.unavailable"));
         }
 
         AppLogger.warning("Using demo authentication fallback for user: " + normalizedUsername);
@@ -69,7 +69,7 @@ public class AuthService {
             try {
                 dbUserRepository.recordLogin(account.getUsername());
             } catch (SQLException e) {
-                System.err.println("[WARN] Failed to update last_login_at: " + e.getMessage());
+                AppLogger.error("Failed to update last_login_at.", e);
             }
             return new UserSession(
                     account.getUsername(),
@@ -82,7 +82,7 @@ public class AuthService {
             databaseReady = false;
             AppLogger.error("Database authentication failed.", e);
             if (!dbConfig.isFallbackToDemo()) {
-                throw new AuthException("Database login failed: " + e.getMessage());
+                throw new AuthException(I18n.t(language, "auth.database.failed"));
             }
             return authenticateWithDemo(normalizedUsername, password, language);
         }

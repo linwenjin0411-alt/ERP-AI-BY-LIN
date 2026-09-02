@@ -42,6 +42,12 @@ public final class I18n {
         put("login.signingIn", "Signing in and loading workspace...",
                 "正在登录并加载工作台...",
                 "ログインしてワークスペースを読み込んでいます...");
+        put("login.interrupted", "Sign-in was interrupted. Please try again.",
+                "登录被中断，请重试。",
+                "ログインが中断されました。もう一度お試しください。");
+        put("login.failed.generic", "Sign-in failed. Please check the app log or contact the administrator.",
+                "登录失败，请查看应用日志或联系管理员。",
+                "ログインに失敗しました。アプリログを確認するか、管理者に連絡してください。");
         put("login.success", "Signed in. Opening workspace...",
                 "登录成功，正在进入系统...",
                 "ログインしました。ワークスペースを開いています...");
@@ -166,6 +172,12 @@ public final class I18n {
         put("auth.password.required", "Enter a password.", "请输入密码。", "パスワードを入力してください。");
         put("auth.user.notFound", "User does not exist.", "用户不存在。", "ユーザーが存在しません。");
         put("auth.bad.credentials", "User ID or password is incorrect.", "用户 ID 或密码不正确。", "ユーザー ID またはパスワードが正しくありません。");
+        put("auth.database.unavailable", "Database login is unavailable. Check local database settings or contact the administrator.",
+                "数据库登录不可用。请检查本地数据库设置或联系管理员。",
+                "データベースログインを利用できません。ローカルDB設定を確認するか、管理者に連絡してください。");
+        put("auth.database.failed", "Database login failed. Please check the app log or contact the administrator.",
+                "数据库登录失败。请查看应用日志或联系管理员。",
+                "データベースログインに失敗しました。アプリログを確認するか、管理者に連絡してください。");
         put("user.admin.name", "System Administrator", "系统管理员", "システム管理者");
         put("user.planner.name", "Production Planner", "生产计划员", "生産計画担当");
         put("role.admin", "System Administrator", "系统管理员", "システム管理者");

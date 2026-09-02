@@ -1,5 +1,7 @@
 package com.lin.erp.config;
 
+import com.lin.erp.logging.AppLogger;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -43,7 +45,7 @@ public class DbConfig {
                 input = new FileInputStream(file);
                 properties.load(input);
             } catch (IOException e) {
-                System.err.println("[WARN] Failed to read config/db.properties: " + e.getMessage());
+                AppLogger.error("Failed to read config/db.properties.", e);
             } finally {
                 if (input != null) {
                     try {

@@ -400,13 +400,13 @@ public class LoginFrame extends JFrame {
                     dispose();
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
-                    showLoginFailure("Sign-in was interrupted.", ex);
+                    showLoginFailure(I18n.t(selectedLanguage, "login.interrupted"), ex);
                 } catch (ExecutionException ex) {
                     Throwable cause = ex.getCause() == null ? ex : ex.getCause();
                     if (cause instanceof AuthException) {
                         showLoginFailure(cause.getMessage(), cause);
                     } else {
-                        showLoginFailure("Sign-in failed. See logs/app log for details.", cause);
+                        showLoginFailure(I18n.t(selectedLanguage, "login.failed.generic"), cause);
                     }
                 }
             }
