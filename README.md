@@ -219,4 +219,4 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
 - `LinovaOneERP.exe` starts `run.bat` hidden, so no command window is shown for daily desktop use.
 - `run.bat` builds with Maven, starts the app, and still supports `--compile-only`, `--init-db`, and `--diagnose-login` for maintenance.
-- The application uses a custom Linova ERP icon drawn in Java, so title bars no longer use the default Java icon.
+- The application icon is loaded from `src/main/resources/com/lin/erp/ui/app-icon.png`, and the Windows launcher embeds the matching `launcher/LinovaOneERP.ico`.
