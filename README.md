@@ -171,21 +171,32 @@ The program creates these initial tables:
 
 Most screen data shown after login now comes from MySQL. This includes module names, three-level menus, toolbar actions, process flows, KPI cards, worklist tables, focus items, and item master records.
 
-## Demo Application Users
+## Initial Application User
 
-These users are seeded into MySQL by `run.bat --init-db`:
+`run.bat --init-db` no longer seeds a fixed database password. If the MySQL user table is empty, the initializer creates the first administrator account and requires an initial password.
+
+Interactive setup:
+
+```bat
+run.bat --init-db
+```
+
+Non-interactive setup:
+
+```bat
+set LINOVA_ADMIN_PASSWORD=change-this-before-use
+run.bat --init-db
+set LINOVA_ADMIN_PASSWORD=
+```
+
+The initial database account is:
 
 ```text
 User ID: admin
-Password: admin123
 Role: System Administrator
 ```
 
-```text
-User ID: planner
-Password: plan123
-Role: Production Planner
-```
+The built-in demo fallback accounts are only for local development when MySQL is disabled and must not be used for production deployment.
 
 ## Dependencies
 
