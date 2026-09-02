@@ -60,6 +60,14 @@ Rebuild the EXE launcher:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-launcher.ps1
 ```
 
+Build a delivery package:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-distribution.ps1
+```
+
+To include a local Windows JRE in the package, pass `-RuntimePath C:\path\to\jre`. The generated package is written under `build/dist/LinovaOneERP` and contains the launcher, `run.bat`, the built jar, database schema, config template, and delivery notes.
+
 Diagnose login and module loading:
 
 ```bat
@@ -229,4 +237,5 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
 - `LinovaOneERP.exe` starts `run.bat` hidden, so no command window is shown for daily desktop use.
 - `run.bat` starts the existing jar for daily use and only builds with Maven when `--compile-only` is specified; it still supports `--init-db` and `--diagnose-login` for maintenance.
+- `build-distribution.ps1` creates the formal delivery folder under `build/dist/` and can include a bundled Windows JRE through `-RuntimePath`.
 - The application icon is loaded from `src/main/resources/com/lin/erp/ui/app-icon.png`, and the Windows launcher embeds the matching `launcher/LinovaOneERP.ico`.
