@@ -33,7 +33,7 @@ public class DbConfig {
         username = properties.getProperty("db.username", "").trim();
         password = properties.getProperty("db.password", "");
         useSsl = Boolean.parseBoolean(properties.getProperty("db.useSsl", "false"));
-        allowPublicKeyRetrieval = Boolean.parseBoolean(properties.getProperty("db.allowPublicKeyRetrieval", "true"));
+        allowPublicKeyRetrieval = Boolean.parseBoolean(properties.getProperty("db.allowPublicKeyRetrieval", "false"));
         serverTimezone = properties.getProperty("db.serverTimezone", "UTC").trim();
         connectTimeoutMs = parseInt(properties.getProperty("db.connectTimeoutMs"), 3000);
         socketTimeoutMs = parseInt(properties.getProperty("db.socketTimeoutMs"), 5000);
