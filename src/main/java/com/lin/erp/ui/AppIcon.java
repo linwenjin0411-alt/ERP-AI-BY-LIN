@@ -1,5 +1,6 @@
 package com.lin.erp.ui;
 
+import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.GradientPaint;
@@ -8,25 +9,57 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class AppIcon {
+    private static final String RESOURCE_PATH = "/com/lin/erp/ui/app-icon.png";
+
     private AppIcon() {
     }
 
     public static List<Image> images() {
         List<Image> images = new ArrayList<Image>();
-        images.add(create(16));
-        images.add(create(24));
-        images.add(create(32));
-        images.add(create(48));
-        images.add(create(64));
-        images.add(create(128));
+        BufferedImage source = loadResourceIcon();
+        int[] sizes = {16, 24, 32, 48, 64, 128, 256};
+        for (int i = 0; i < sizes.length; i++) {
+            images.add(source == null ? createFallback(sizes[i]) : scale(source, sizes[i]));
+        }
         return images;
     }
 
-    private static BufferedImage create(int size) {
+    private static BufferedImage loadResourceIcon() {
+        InputStream input = AppIcon.class.getResourceAsStream(RESOURCE_PATH);
+        if (input == null) {
+            return null;
+        }
+        try {
+            return ImageIO.read(input);
+        } catch (IOException e) {
+            return null;
+        } finally {
+            try {
+                input.close();
+            } catch (IOException ignored) {
+                // Nothing useful to do if the icon stream cannot be closed.
+            }
+        }
+    }
+
+    private static BufferedImage scale(BufferedImage source, int size) {
+        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.drawImage(source, 0, 0, size, size, null);
+        g.dispose();
+        return image;
+    }
+
+    private static BufferedImage createFallback(int size) {
         BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
