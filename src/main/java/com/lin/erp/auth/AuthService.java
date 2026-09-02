@@ -74,6 +74,7 @@ public class AuthService {
             return new UserSession(
                     account.getUsername(),
                     account.getDisplayName(),
+                    account.getRoleCode(),
                     account.getRoleName(),
                     account.getCompanyName(),
                     language
@@ -106,6 +107,7 @@ public class AuthService {
         return new UserSession(
                 account.username,
                 account.displayNameKey,
+                account.roleCode,
                 account.roleNameKey,
                 account.companyNameKey,
                 language
@@ -118,6 +120,7 @@ public class AuthService {
                 normalizedUsername,
                 hashPassword(password),
                 displayNameKey,
+                roleCodeFromKey(roleNameKey),
                 roleNameKey,
                 companyNameKey
         ));
@@ -128,6 +131,16 @@ public class AuthService {
             return "";
         }
         return username.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String roleCodeFromKey(String roleNameKey) {
+        if ("role.admin".equals(roleNameKey)) {
+            return "ADMIN";
+        }
+        if ("role.planner".equals(roleNameKey)) {
+            return "PLANNER";
+        }
+        return "";
     }
 
     private byte[] hashPassword(String password) {
@@ -153,13 +166,15 @@ public class AuthService {
         private final String username;
         private final byte[] passwordHash;
         private final String displayNameKey;
+        private final String roleCode;
         private final String roleNameKey;
         private final String companyNameKey;
 
-        private Account(String username, byte[] passwordHash, String displayNameKey, String roleNameKey, String companyNameKey) {
+        private Account(String username, byte[] passwordHash, String displayNameKey, String roleCode, String roleNameKey, String companyNameKey) {
             this.username = username;
             this.passwordHash = passwordHash;
             this.displayNameKey = displayNameKey;
+            this.roleCode = roleCode;
             this.roleNameKey = roleNameKey;
             this.companyNameKey = companyNameKey;
         }

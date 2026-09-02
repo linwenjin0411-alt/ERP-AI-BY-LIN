@@ -56,6 +56,7 @@ import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,10 +109,11 @@ public class MainFrame extends JFrame {
     }
 
     private void initializeFrame() {
+        loadSecondaryMenus();
+        applyModuleViewPermissions();
         if (!modules.isEmpty()) {
             currentModule = modules.get(0);
         }
-        loadSecondaryMenus();
         currentSubMenu = firstVisibleSubMenu(currentModule);
         AppLogger.userAction("WORKSPACE_OPEN", "user=" + session.getUsername() + " | module=" + moduleCode(currentModule));
 
@@ -141,13 +143,37 @@ public class MainFrame extends JFrame {
 
     private void loadSecondaryMenus() {
         childMenusByModule.clear();
+        boolean loadedFromDatabase = false;
         try {
-            childMenusByModule.putAll(menuRepository.loadChildrenByModule());
-            AppLogger.info("Loaded ERP secondary menus from database. Root count: " + childMenusByModule.size());
+            childMenusByModule.putAll(menuRepository.loadChildrenByModule(session.getRoleCode()));
+            loadedFromDatabase = true;
+            AppLogger.info("Loaded ERP secondary menus from database. Role: " + session.getRoleCode()
+                    + ", root count: " + childMenusByModule.size());
         } catch (SQLException e) {
             AppLogger.error("Failed to load ERP secondary menus. Fallback menus will be used.", e);
         }
-        mergeFallbackSecondaryMenus();
+        if (!loadedFromDatabase) {
+            mergeFallbackSecondaryMenus();
+        }
+    }
+
+    private void applyModuleViewPermissions() {
+        if (childMenusByModule.isEmpty()) {
+            return;
+        }
+        Iterator<ModulePageData> iterator = modules.iterator();
+        while (iterator.hasNext()) {
+            ModulePageData module = iterator.next();
+            if (!isAlwaysVisibleModule(module) && !childMenusByModule.containsKey(module.getCode())) {
+                AppLogger.info("Module hidden by role menu permissions. Role: " + session.getRoleCode()
+                        + ", module: " + module.getCode());
+                iterator.remove();
+            }
+        }
+    }
+
+    private boolean isAlwaysVisibleModule(ModulePageData module) {
+        return module != null && "DASHBOARD".equals(module.getCode());
     }
 
     private void mergeFallbackSecondaryMenus() {

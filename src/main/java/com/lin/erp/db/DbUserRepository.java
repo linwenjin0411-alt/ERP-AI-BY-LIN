@@ -23,7 +23,7 @@ public class DbUserRepository {
         try {
             connection = Database.connect(config);
             statement = connection.prepareStatement(
-                    "select u.username, u.password_hash, u.display_name, r.name as role_name, c.name as company_name "
+                    "select u.username, u.password_hash, u.display_name, r.code as role_code, r.name as role_name, c.name as company_name "
                             + "from erp_users u "
                             + "join erp_roles r on r.id = u.role_id "
                             + "join erp_companies c on c.id = u.company_id "
@@ -40,6 +40,7 @@ public class DbUserRepository {
                     resultSet.getString("username"),
                     resultSet.getString("password_hash"),
                     resultSet.getString("display_name"),
+                    resultSet.getString("role_code"),
                     resultSet.getString("role_name"),
                     resultSet.getString("company_name")
             );
@@ -123,13 +124,15 @@ public class DbUserRepository {
         private final String username;
         private final String passwordHash;
         private final String displayName;
+        private final String roleCode;
         private final String roleName;
         private final String companyName;
 
-        public DbAccount(String username, String passwordHash, String displayName, String roleName, String companyName) {
+        public DbAccount(String username, String passwordHash, String displayName, String roleCode, String roleName, String companyName) {
             this.username = username;
             this.passwordHash = passwordHash;
             this.displayName = displayName;
+            this.roleCode = roleCode;
             this.roleName = roleName;
             this.companyName = companyName;
         }
@@ -144,6 +147,10 @@ public class DbUserRepository {
 
         public String getDisplayName() {
             return displayName;
+        }
+
+        public String getRoleCode() {
+            return roleCode;
         }
 
         public String getRoleName() {

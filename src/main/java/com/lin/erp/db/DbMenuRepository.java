@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class DbMenuRepository {
@@ -19,17 +20,34 @@ public class DbMenuRepository {
     }
 
     public Map<String, List<MenuNode>> loadChildrenByModule() throws SQLException {
+        return loadChildrenByModule(null);
+    }
+
+    public Map<String, List<MenuNode>> loadChildrenByModule(String roleCode) throws SQLException {
         Connection connection = null;
         PreparedStatement statement = null;
         ResultSet resultSet = null;
         try {
             connection = Database.connect(config);
-            statement = connection.prepareStatement(
-                    "select code, parent_code, name_key, module_code "
-                            + "from erp_menus "
-                            + "where active = 1 "
-                            + "order by sort_order, code"
-            );
+            String normalizedRoleCode = normalizeRoleCode(roleCode);
+            if (normalizedRoleCode.length() == 0) {
+                statement = connection.prepareStatement(
+                        "select code, parent_code, name_key, module_code "
+                                + "from erp_menus "
+                                + "where active = 1 "
+                                + "order by sort_order, code"
+                );
+            } else {
+                statement = connection.prepareStatement(
+                        "select distinct m.code, m.parent_code, m.name_key, m.module_code, m.sort_order "
+                                + "from erp_menus m "
+                                + "join erp_role_menus rm on rm.menu_id = m.id and rm.can_view = 1 "
+                                + "join erp_roles r on r.id = rm.role_id and r.active = 1 "
+                                + "where m.active = 1 and upper(r.code) = ? "
+                                + "order by m.sort_order, m.code"
+                );
+                statement.setString(1, normalizedRoleCode);
+            }
             resultSet = statement.executeQuery();
 
             List<MenuNode> orderedMenus = new ArrayList<MenuNode>();
@@ -72,5 +90,12 @@ public class DbMenuRepository {
                 connection.close();
             }
         }
+    }
+
+    private String normalizeRoleCode(String roleCode) {
+        if (roleCode == null) {
+            return "";
+        }
+        return roleCode.trim().toUpperCase(Locale.ROOT);
     }
 }
