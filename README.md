@@ -239,3 +239,4 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - `run.bat` starts the existing jar for daily use and only builds with Maven when `--compile-only` is specified; it still supports `--init-db` and `--diagnose-login` for maintenance.
 - `build-distribution.ps1` creates the formal delivery folder under `build/dist/` and can include a bundled Windows JRE through `-RuntimePath`.
 - The application icon is loaded from `src/main/resources/com/lin/erp/ui/app-icon.png`, and the Windows launcher embeds the matching `launcher/LinovaOneERP.ico`.
+- Windows Explorer can cache an old `.exe` icon after the launcher is rebuilt. Verify the actual embedded icon from the file properties or by copying the rebuilt `LinovaOneERP.exe` to a new folder/name; refresh Explorer or clear the Windows icon cache before judging delivery screenshots.
