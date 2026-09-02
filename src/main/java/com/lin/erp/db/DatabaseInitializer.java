@@ -23,19 +23,44 @@ public class DatabaseInitializer {
         List<String> statements = loadSchemaStatements();
         Connection connection = null;
         Statement statement = null;
+        boolean originalAutoCommit = true;
+        boolean autoCommitChanged = false;
         try {
             connection = Database.connect(config);
+            originalAutoCommit = connection.getAutoCommit();
+            if (originalAutoCommit) {
+                connection.setAutoCommit(false);
+                autoCommitChanged = true;
+            }
             statement = connection.createStatement();
             for (String sql : statements) {
                 statement.execute(sql);
             }
+            connection.commit();
+        } catch (SQLException e) {
+            rollback(connection);
+            throw e;
         } finally {
             if (statement != null) {
                 statement.close();
             }
             if (connection != null) {
+                if (autoCommitChanged) {
+                    connection.setAutoCommit(originalAutoCommit);
+                }
                 connection.close();
             }
+        }
+    }
+
+    private void rollback(Connection connection) {
+        if (connection == null) {
+            return;
+        }
+        try {
+            connection.rollback();
+        } catch (SQLException ignored) {
+            // Initialization is already failing; keep the original exception.
         }
     }
 
