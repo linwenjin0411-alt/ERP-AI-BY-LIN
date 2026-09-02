@@ -101,20 +101,19 @@ Main navigation uses an mcframe-style three-level layout: dark root module menu,
 
 After a user ID and password are accepted, the login flow checks whether an active license is still within its valid date range. If no valid license exists, the login window shows a localized English, Simplified Chinese, or Japanese prompt and asks for a license key before opening the ERP workspace.
 
-Supported license key formats:
+Supported license key format:
 
 ```text
-LINOVA-yyyyMMdd
-LINOVA-yyyy-MM-dd
+LINOVA-yyyyMMdd-signature
 ```
 
-Example:
+The date portion is the license expiration date. The signature portion is verified with the application public key, so a plain future date is not enough to create a valid license.
 
 ```text
-LINOVA-20271231
+Example structure only: LINOVA-20271231-<signature>
 ```
 
-The date portion is treated as the license expiration date. Expired or malformed keys are rejected, and the login window remains open.
+Expired, malformed, or unsigned keys are rejected, and the login window remains open.
 
 When MySQL is enabled, licenses are stored in `erp_licenses`. When demo mode is used without MySQL, the license is stored locally in `config/license.properties`.
 

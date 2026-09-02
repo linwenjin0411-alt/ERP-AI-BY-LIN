@@ -68,9 +68,9 @@ public final class I18n {
         put("message.delete.confirm", "Delete selected record", "删除所选记录", "選択したレコードを削除します");
         put("message.item.required", "Item code and item name are required.", "品目编号和品目名称为必填项。", "品目コードと品目名は必須です。");
         put("license.prompt.title", "License required", "需要许可证", "ライセンスが必要です");
-        put("license.prompt.message", "Enter a valid license key. Format: LINOVA-yyyyMMdd or LINOVA-yyyy-MM-dd.",
-                "请输入有效许可证。格式：LINOVA-yyyyMMdd 或 LINOVA-yyyy-MM-dd。",
-                "有効なライセンスキーを入力してください。形式：LINOVA-yyyyMMdd または LINOVA-yyyy-MM-dd。");
+        put("license.prompt.message", "Enter a signed license key. Format: LINOVA-yyyyMMdd-signature.",
+                "请输入签名许可证。格式：LINOVA-yyyyMMdd-signature。",
+                "署名付きライセンスキーを入力してください。形式：LINOVA-yyyyMMdd-signature。");
         put("license.required", "A valid license is required before sign-in can continue.",
                 "必须输入有效许可证后才能继续登录。",
                 "ログインを続行するには有効なライセンスが必要です。");

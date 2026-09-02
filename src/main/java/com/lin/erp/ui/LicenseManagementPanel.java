@@ -32,7 +32,7 @@ class LicenseManagementPanel extends JPanel {
     private final Window owner;
     private final UserSession session;
     private final DbLicenseRepository repository;
-    private final JTextField licenseField = new JTextField("LINOVA-20271231");
+    private final JTextField licenseField = new JTextField("LINOVA-yyyyMMdd-signature");
     private final JLabel statusLabel = new JLabel();
     private final DefaultTableModel tableModel;
 

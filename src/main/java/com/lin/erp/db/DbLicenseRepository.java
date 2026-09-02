@@ -47,10 +47,11 @@ public class DbLicenseRepository {
     }
 
     public LicenseStatus registerLicense(String licenseKey) throws SQLException {
-        LocalDate validUntil = parseValidUntil(licenseKey);
-        if (validUntil == null || validUntil.isBefore(LocalDate.now())) {
-            return new LicenseStatus(false, licenseKey, validUntil);
+        LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(licenseKey, true);
+        if (!verification.isValid()) {
+            return new LicenseStatus(false, licenseKey, verification.getValidUntil());
         }
+        LocalDate validUntil = verification.getValidUntil();
         if (!config.isEnabled()) {
             return registerLocalLicense(licenseKey, validUntil);
         }
@@ -95,8 +96,8 @@ public class DbLicenseRepository {
             input = new FileInputStream(file);
             properties.load(input);
             String key = properties.getProperty("license.key");
-            LocalDate validUntil = parseValidUntil(key);
-            return new LicenseStatus(validUntil != null && !validUntil.isBefore(LocalDate.now()), key, validUntil);
+            LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(key, true);
+            return new LicenseStatus(verification.isValid(), key, verification.getValidUntil());
         } catch (IOException e) {
             throw new SQLException("Failed to read config/license.properties: " + e.getMessage(), e);
         } finally {
@@ -138,28 +139,6 @@ public class DbLicenseRepository {
 
     private File localLicenseFile() {
         return new File("config", "license.properties");
-    }
-
-    private LocalDate parseValidUntil(String licenseKey) {
-        if (licenseKey == null) {
-            return null;
-        }
-        String normalized = licenseKey.trim().toUpperCase();
-        if (!normalized.startsWith("LINOVA-")) {
-            return null;
-        }
-        String datePart = normalized.substring("LINOVA-".length()).replace("-", "");
-        if (datePart.length() != 8) {
-            return null;
-        }
-        try {
-            int year = Integer.parseInt(datePart.substring(0, 4));
-            int month = Integer.parseInt(datePart.substring(4, 6));
-            int day = Integer.parseInt(datePart.substring(6, 8));
-            return LocalDate.of(year, month, day);
-        } catch (RuntimeException e) {
-            return null;
-        }
     }
 
     private void ensureSchema(Connection connection) throws SQLException {
