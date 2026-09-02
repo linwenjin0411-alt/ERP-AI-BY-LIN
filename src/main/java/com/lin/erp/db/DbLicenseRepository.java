@@ -47,7 +47,7 @@ public class DbLicenseRepository {
     }
 
     public LicenseStatus registerLicense(String licenseKey) throws SQLException {
-        LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(licenseKey, true);
+        LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(licenseKey, false);
         if (!verification.isValid()) {
             return new LicenseStatus(false, licenseKey, verification.getValidUntil());
         }
@@ -96,7 +96,7 @@ public class DbLicenseRepository {
             input = new FileInputStream(file);
             properties.load(input);
             String key = properties.getProperty("license.key");
-            LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(key, true);
+            LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(key, false);
             return new LicenseStatus(verification.isValid(), key, verification.getValidUntil());
         } catch (IOException e) {
             throw new SQLException("Failed to read config/license.properties: " + e.getMessage(), e);
