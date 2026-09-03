@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URLEncoder;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.Date;
@@ -35,7 +36,7 @@ public class DbLicenseRepository {
             return databaseStatus;
         }
 
-        LicenseStatus apiStatus = verifyConfiguredApi();
+        LicenseStatus apiStatus = verifyConfiguredApi(null);
         if (apiStatus.isValid()) {
             return registerDatabaseLicense(apiStatus.getLicenseKey(), apiStatus.getValidUntil());
         }
@@ -65,6 +66,15 @@ public class DbLicenseRepository {
     }
 
     public LicenseStatus registerLicense(String licenseKey) throws SQLException {
+        LicenseStatus apiStatus = verifyConfiguredApi(licenseKey);
+        if (apiStatus.isValid()) {
+            LocalDate validUntil = apiStatus.getValidUntil();
+            if (!config.isEnabled()) {
+                return registerLocalLicense(apiStatus.getLicenseKey(), validUntil);
+            }
+            return registerDatabaseLicense(apiStatus.getLicenseKey(), validUntil);
+        }
+
         LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(licenseKey, false);
         if (!verification.isValid()) {
             return new LicenseStatus(false, licenseKey, verification.getValidUntil());
@@ -106,14 +116,14 @@ public class DbLicenseRepository {
         }
     }
 
-    private LicenseStatus verifyConfiguredApi() throws SQLException {
+    private LicenseStatus verifyConfiguredApi(String licenseKey) throws SQLException {
         LicenseApiConfig apiConfig = loadLicenseApiConfig();
         if (!apiConfig.isConfigured()) {
             return new LicenseStatus(false, null, null);
         }
         HttpURLConnection connection = null;
         try {
-            URL url = new URL(apiConfig.getVerifyApiUrl());
+            URL url = new URL(apiConfig.getVerifyApiUrl(licenseKey));
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(apiConfig.getTimeoutMs());
@@ -122,11 +132,11 @@ public class DbLicenseRepository {
             int statusCode = connection.getResponseCode();
             if (statusCode == HttpURLConnection.HTTP_OK) {
                 LocalDate validUntil = LocalDate.now().plusDays(apiConfig.getCacheDays());
-                return new LicenseStatus(true, apiConfig.getDatabaseLicenseKey(), validUntil);
+                return new LicenseStatus(true, apiConfig.getDatabaseLicenseKey(licenseKey), validUntil);
             }
-            return new LicenseStatus(false, apiConfig.getDatabaseLicenseKey(), null);
+            return new LicenseStatus(false, apiConfig.getDatabaseLicenseKey(licenseKey), null);
         } catch (IOException e) {
-            throw new SQLException("Failed to verify license API: " + e.getMessage(), e);
+            return new LicenseStatus(false, licenseKey, null);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -319,8 +329,20 @@ public class DbLicenseRepository {
             return verifyApiUrl.length() > 0;
         }
 
-        private String getVerifyApiUrl() {
-            return verifyApiUrl;
+        private String getVerifyApiUrl(String licenseKey) {
+            String url = verifyApiUrl;
+            String key = licenseKey == null ? "" : licenseKey.trim();
+            if (key.length() > 0) {
+                String encodedKey = urlEncode(key);
+                url = url.replace("{license_key}", encodedKey).replace("{license}", encodedKey);
+                if (!hasQueryParam(url, "license_key")) {
+                    url = appendQueryParam(url, "license_key", encodedKey);
+                }
+            }
+            if (!hasQueryParam(url, "product_code")) {
+                url = appendQueryParam(url, "product_code", "LinovaOneERP");
+            }
+            return url;
         }
 
         private int getCacheDays() {
@@ -331,8 +353,29 @@ public class DbLicenseRepository {
             return timeoutMs;
         }
 
-        private String getDatabaseLicenseKey() {
-            return "API:" + verifyApiUrl;
+        private String getDatabaseLicenseKey(String licenseKey) {
+            String key = licenseKey == null ? "" : licenseKey.trim();
+            return key.length() == 0 ? "API:" + verifyApiUrl : key;
+        }
+
+        private static boolean hasQueryParam(String url, String name) {
+            return url.toLowerCase().contains(name.toLowerCase() + "=");
+        }
+
+        private static String appendQueryParam(String url, String name, String encodedValue) {
+            String separator = url.contains("?") ? "&" : "?";
+            if (url.endsWith("?") || url.endsWith("&")) {
+                separator = "";
+            }
+            return url + separator + name + "=" + encodedValue;
+        }
+
+        private static String urlEncode(String value) {
+            try {
+                return URLEncoder.encode(value, "UTF-8");
+            } catch (IOException e) {
+                return value;
+            }
         }
     }
 }
