@@ -42,7 +42,7 @@ public class DbLicenseRepository {
         if (databaseStatus.isValid()) {
             LicenseStatus verified = verifyConfiguredApi(databaseStatus.getLicenseKey(), userCode);
             if (verified.isValid()) {
-                return registerDatabaseLicense(databaseStatus.getLicenseKey(), verified.getValidUntil());
+                return new LicenseStatus(true, databaseStatus.getLicenseKey(), verified.getValidUntil());
             }
             return verified;
         }
