@@ -123,7 +123,9 @@ Example structure only: LINOVA-20271231-<signature>
 
 Expired, malformed, or unsigned keys are rejected, and the login window remains open.
 
-When MySQL is enabled, licenses are stored in `erp_licenses`. When demo mode is used without MySQL, the license is stored locally in `config/license.properties`. This local license file is ignored by Git and must not be committed.
+When MySQL is enabled, licenses are stored in `erp_licenses`. If the database has an active unexpired license, sign-in continues without asking the user again. If no valid database license exists, the app reads `license.verifyApiUrl` from `config/license.properties`, requests that full URL, and treats HTTP 200 as a successful license verification. The result is cached back into `erp_licenses` for `license.cacheDays` days.
+
+When demo mode is used without MySQL, the license is stored locally in `config/license.properties`. This local license file is ignored by Git and must not be committed.
 
 Administrators can also open `Administration -> Security -> Roles -> License Management` / `系统管理 -> 安全权限 -> 角色 -> 许可证管理` / `システム管理 -> セキュリティ -> ロール -> ライセンス管理` to view the current license status and register a new license.
 

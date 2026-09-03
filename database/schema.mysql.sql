@@ -164,7 +164,7 @@ create table if not exists erp_function_records (
 
 create table if not exists erp_licenses (
   id bigint primary key auto_increment,
-  license_key varchar(160) not null,
+  license_key varchar(500) not null,
   valid_from date not null,
   valid_until date not null,
   active tinyint(1) not null default 1,

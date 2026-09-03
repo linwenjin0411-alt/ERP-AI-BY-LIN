@@ -9,12 +9,14 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 
 public final class LicenseKeyVerifier {
     private static final String PREFIX = "LINOVA-";
     private static final String SIGNATURE_PAYLOAD_PREFIX = "LINOVA|";
     private static final String PUBLIC_KEY_RESOURCE = "/com/lin/erp/license/license-public-key.txt";
+    private static final DateTimeFormatter COMPACT_DATE = DateTimeFormatter.BASIC_ISO_DATE;
 
     private LicenseKeyVerifier() {
     }
@@ -29,7 +31,7 @@ public final class LicenseKeyVerifier {
         }
 
         String normalized = licenseKey.trim();
-        String datePart = normalized.substring(PREFIX.length()).replace("-", "");
+        String datePart = COMPACT_DATE.format(validUntil);
         String expectedUnsigned = PREFIX + datePart;
         if (normalized.equalsIgnoreCase(expectedUnsigned)) {
             return allowLegacyDateOnly ? Result.valid(validUntil, true) : Result.invalid(validUntil);
