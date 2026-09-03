@@ -428,7 +428,7 @@ public class LoginFrame extends JFrame {
 
     private boolean ensureLicense(UserSession session) {
         try {
-            LicenseStatus status = licenseRepository.currentStatus();
+            LicenseStatus status = licenseRepository.currentStatus(session.getUsername());
             if (status.isValid()) {
                 AppLogger.userAction("LICENSE_VALID", "username=" + session.getUsername()
                         + " | validUntil=" + status.getValidUntil());
@@ -454,7 +454,7 @@ public class LoginFrame extends JFrame {
                 return false;
             }
             try {
-                LicenseStatus registered = licenseRepository.registerLicense(key);
+                LicenseStatus registered = licenseRepository.registerLicense(key, session.getUsername());
                 if (registered.isValid()) {
                     AppLogger.userAction("LICENSE_REGISTER_SUCCESS", "username=" + session.getUsername()
                             + " | validUntil=" + registered.getValidUntil());

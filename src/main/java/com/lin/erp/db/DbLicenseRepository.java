@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -16,6 +17,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class DbLicenseRepository {
     private static final int DEFAULT_API_TIMEOUT_MS = 5000;
@@ -28,15 +31,23 @@ public class DbLicenseRepository {
     }
 
     public LicenseStatus currentStatus() throws SQLException {
+        return currentStatus("");
+    }
+
+    public LicenseStatus currentStatus(String userCode) throws SQLException {
         if (!config.isEnabled()) {
             return currentLocalStatus();
         }
         LicenseStatus databaseStatus = currentDatabaseStatus();
         if (databaseStatus.isValid()) {
-            return databaseStatus;
+            LicenseStatus verified = verifyConfiguredApi(databaseStatus.getLicenseKey(), userCode);
+            if (verified.isValid()) {
+                return registerDatabaseLicense(databaseStatus.getLicenseKey(), verified.getValidUntil());
+            }
+            return verified;
         }
 
-        LicenseStatus apiStatus = verifyConfiguredApi(null);
+        LicenseStatus apiStatus = verifyConfiguredApi(null, userCode);
         if (apiStatus.isValid()) {
             return registerDatabaseLicense(apiStatus.getLicenseKey(), apiStatus.getValidUntil());
         }
@@ -66,7 +77,11 @@ public class DbLicenseRepository {
     }
 
     public LicenseStatus registerLicense(String licenseKey) throws SQLException {
-        LicenseStatus apiStatus = verifyConfiguredApi(licenseKey);
+        return registerLicense(licenseKey, "");
+    }
+
+    public LicenseStatus registerLicense(String licenseKey, String userCode) throws SQLException {
+        LicenseStatus apiStatus = verifyConfiguredApi(licenseKey, userCode);
         if (apiStatus.isValid()) {
             LocalDate validUntil = apiStatus.getValidUntil();
             if (!config.isEnabled()) {
@@ -116,14 +131,14 @@ public class DbLicenseRepository {
         }
     }
 
-    private LicenseStatus verifyConfiguredApi(String licenseKey) throws SQLException {
+    private LicenseStatus verifyConfiguredApi(String licenseKey, String userCode) throws SQLException {
         LicenseApiConfig apiConfig = loadLicenseApiConfig();
         if (!apiConfig.isConfigured()) {
             return new LicenseStatus(false, null, null);
         }
         HttpURLConnection connection = null;
         try {
-            URL url = new URL(apiConfig.getVerifyApiUrl(licenseKey));
+            URL url = new URL(apiConfig.getVerifyApiUrl(licenseKey, userCode));
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(apiConfig.getTimeoutMs());
@@ -131,7 +146,10 @@ public class DbLicenseRepository {
             connection.setUseCaches(false);
             int statusCode = connection.getResponseCode();
             if (statusCode == HttpURLConnection.HTTP_OK) {
-                LocalDate validUntil = LocalDate.now().plusDays(apiConfig.getCacheDays());
+                LocalDate validUntil = responseValidUntil(connection);
+                if (validUntil == null) {
+                    validUntil = LocalDate.now().plusDays(apiConfig.getCacheDays());
+                }
                 return new LicenseStatus(true, apiConfig.getDatabaseLicenseKey(licenseKey), validUntil);
             }
             return new LicenseStatus(false, apiConfig.getDatabaseLicenseKey(licenseKey), null);
@@ -141,6 +159,34 @@ public class DbLicenseRepository {
             if (connection != null) {
                 connection.disconnect();
             }
+        }
+    }
+
+    private LocalDate responseValidUntil(HttpURLConnection connection) {
+        try {
+            byte[] bytes = readAll(connection.getInputStream());
+            String body = new String(bytes, StandardCharsets.UTF_8);
+            Matcher matcher = Pattern.compile("\"expires_at\"\\s*:\\s*\"(\\d{4}-\\d{2}-\\d{2})\"").matcher(body);
+            if (matcher.find()) {
+                return LocalDate.parse(matcher.group(1));
+            }
+        } catch (Exception ignored) {
+            // Cache duration is still a valid fallback when the API omits a date.
+        }
+        return null;
+    }
+
+    private byte[] readAll(java.io.InputStream input) throws IOException {
+        try {
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                output.write(buffer, 0, read);
+            }
+            return output.toByteArray();
+        } finally {
+            input.close();
         }
     }
 
@@ -329,7 +375,7 @@ public class DbLicenseRepository {
             return verifyApiUrl.length() > 0;
         }
 
-        private String getVerifyApiUrl(String licenseKey) {
+        private String getVerifyApiUrl(String licenseKey, String userCode) {
             String url = verifyApiUrl;
             String key = licenseKey == null ? "" : licenseKey.trim();
             if (key.length() > 0) {
@@ -341,6 +387,10 @@ public class DbLicenseRepository {
             }
             if (!hasQueryParam(url, "product_code")) {
                 url = appendQueryParam(url, "product_code", "LinovaOneERP");
+            }
+            String user = userCode == null ? "" : userCode.trim();
+            if (user.length() > 0 && !hasQueryParam(url, "user_code")) {
+                url = appendQueryParam(url, "user_code", urlEncode(user));
             }
             return url;
         }
