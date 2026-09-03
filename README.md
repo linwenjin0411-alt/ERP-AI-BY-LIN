@@ -154,6 +154,8 @@ Copy `config/db.properties.example` to `config/db.properties` and fill in real l
 
 For production MySQL connections, keep `db.allowPublicKeyRetrieval=false`. Only enable it temporarily for a controlled local compatibility test when the database authentication method requires it.
 
+For production MySQL connections, keep `db.useSsl=true` and configure the database server certificate/trust settings as required by the deployment environment. Set it to `false` only for an isolated local database that does not support TLS.
+
 The schema file is:
 
 ```text
