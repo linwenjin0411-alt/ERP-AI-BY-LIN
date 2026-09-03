@@ -1,8 +1,11 @@
 package com.lin.erp.ui;
 
 import com.lin.erp.auth.UserSession;
+import com.lin.erp.config.DbConfig;
 import com.lin.erp.db.DbItemMasterRepository;
+import com.lin.erp.db.DbRoleMenuPermissionRepository;
 import com.lin.erp.db.ItemMasterRecord;
+import com.lin.erp.db.RoleMenuPermission;
 import com.lin.erp.i18n.I18n;
 import com.lin.erp.i18n.Language;
 import com.lin.erp.logging.AppLogger;
@@ -51,6 +54,7 @@ public class ItemMasterPanel extends JPanel {
     private final Window owner;
     private final UserSession session;
     private final DbItemMasterRepository repository;
+    private final RoleMenuPermission permission;
     private final List<ItemMasterRecord> records = new ArrayList<ItemMasterRecord>();
 
     private JTable table;
@@ -65,6 +69,7 @@ public class ItemMasterPanel extends JPanel {
         this.owner = owner;
         this.session = session;
         this.repository = repository;
+        this.permission = loadPermission();
         setOpaque(false);
         add(createToolbar(), BorderLayout.NORTH);
         add(createBody(), BorderLayout.CENTER);
@@ -114,6 +119,11 @@ public class ItemMasterPanel extends JPanel {
         } else {
             button.setBackground(Color.WHITE);
             button.setForeground(AppTheme.TEXT_PRIMARY);
+        }
+        boolean allowed = permission.allows(actionKey);
+        button.setEnabled(allowed);
+        if (!allowed) {
+            button.setToolTipText(t("message.permission.denied"));
         }
         button.addActionListener(new ActionListener() {
             @Override
@@ -222,6 +232,9 @@ public class ItemMasterPanel extends JPanel {
 
     private void handleAction(String actionKey) {
         logAction("ITEM_MASTER_ACTION_CLICK", "action=" + actionKey + " | actionName=" + english(actionKey));
+        if (!ensureActionAllowed(actionKey)) {
+            return;
+        }
         if ("action.new".equals(actionKey)) {
             openForm(false);
         } else if ("action.edit".equals(actionKey)) {
@@ -232,6 +245,24 @@ public class ItemMasterPanel extends JPanel {
             reload();
         } else if ("action.export".equals(actionKey)) {
             export();
+        }
+    }
+
+    private boolean ensureActionAllowed(String actionKey) {
+        if (permission.allows(actionKey)) {
+            return true;
+        }
+        logAction("ITEM_ACTION_DENIED", "action=" + actionKey);
+        AppMessages.error(this, t("message.error.title"), t("message.permission.denied"));
+        return false;
+    }
+
+    private RoleMenuPermission loadPermission() {
+        try {
+            return new DbRoleMenuPermissionRepository(DbConfig.loadDefault()).loadForMenu(session.getRoleCode(), "MASTER_ITEM");
+        } catch (SQLException e) {
+            AppLogger.error("Item master permission load failed.", e);
+            return RoleMenuPermission.viewOnly("MASTER_ITEM");
         }
     }
 
@@ -273,23 +304,33 @@ public class ItemMasterPanel extends JPanel {
             return;
         }
 
-        try {
-            if (editMode) {
-                repository.updateItem(selected.getItemCode(), record);
-                AppMessages.success(this, t("message.edit.success"));
-                logAction("ITEM_SAVE_SUCCESS", "mode=EDIT | itemCode=" + record.getItemCode());
-            } else {
-                repository.createItem(record);
-                AppMessages.success(this, t("message.create.success"));
-                logAction("ITEM_SAVE_SUCCESS", "mode=CREATE | itemCode=" + record.getItemCode());
-            }
-            reload();
-        } catch (SQLException e) {
-            AppLogger.error("Item master save failed.", e);
-            AppMessages.error(this, t("message.error.title"), t("message.save.failed"));
-            logAction("ITEM_SAVE_FAILURE", "mode=" + (editMode ? "EDIT" : "CREATE")
-                    + " | errorType=" + e.getClass().getSimpleName());
-        }
+        final ItemMasterRecord selectedRecord = selected;
+        BackgroundTasks.run(
+                this,
+                "Item master save failed.",
+                t("message.error.title"),
+                t("message.save.failed"),
+                new BackgroundTasks.Work<Void>() {
+                    @Override
+                    public Void run() throws Exception {
+                        if (editMode) {
+                            repository.updateItem(selectedRecord.getItemCode(), record);
+                        } else {
+                            repository.createItem(record);
+                        }
+                        return null;
+                    }
+                },
+                new BackgroundTasks.Success<Void>() {
+                    @Override
+                    public void accept(Void value) {
+                        AppMessages.success(ItemMasterPanel.this, editMode ? t("message.edit.success") : t("message.create.success"));
+                        logAction("ITEM_SAVE_SUCCESS", "mode=" + (editMode ? "EDIT" : "CREATE")
+                                + " | itemCode=" + record.getItemCode());
+                        reload();
+                    }
+                }
+        );
     }
 
     private void deleteSelected() {
@@ -313,31 +354,52 @@ public class ItemMasterPanel extends JPanel {
             return;
         }
 
-        try {
-            repository.deleteItem(record.getItemCode());
-            AppMessages.success(this, t("message.delete.success"));
-            logAction("ITEM_DELETE_SUCCESS", "itemCode=" + record.getItemCode());
-            reload();
-        } catch (SQLException e) {
-            AppLogger.error("Item master delete failed.", e);
-            AppMessages.error(this, t("message.error.title"), t("message.delete.failed"));
-            logAction("ITEM_DELETE_FAILURE", "itemCode=" + record.getItemCode()
-                    + " | errorType=" + e.getClass().getSimpleName());
-        }
+        BackgroundTasks.run(
+                this,
+                "Item master delete failed.",
+                t("message.error.title"),
+                t("message.delete.failed"),
+                new BackgroundTasks.Work<Void>() {
+                    @Override
+                    public Void run() throws Exception {
+                        repository.deleteItem(record.getItemCode());
+                        return null;
+                    }
+                },
+                new BackgroundTasks.Success<Void>() {
+                    @Override
+                    public void accept(Void value) {
+                        AppMessages.success(ItemMasterPanel.this, t("message.delete.success"));
+                        logAction("ITEM_DELETE_SUCCESS", "itemCode=" + record.getItemCode());
+                        reload();
+                    }
+                }
+        );
     }
 
     private void reload() {
-        try {
-            records.clear();
-            records.addAll(repository.loadItems());
-            rebuildTable();
-            AppMessages.info(this, t("message.refresh.done"));
-            logAction("ITEM_PAGE_REFRESH_SUCCESS", "rows=" + records.size());
-        } catch (SQLException e) {
-            AppLogger.error("Item master load failed.", e);
-            AppMessages.error(this, t("message.error.title"), t("message.refresh.failed"));
-            logAction("ITEM_PAGE_REFRESH_FAILURE", "errorType=" + e.getClass().getSimpleName());
-        }
+        BackgroundTasks.run(
+                this,
+                "Item master load failed.",
+                t("message.error.title"),
+                t("message.refresh.failed"),
+                new BackgroundTasks.Work<List<ItemMasterRecord>>() {
+                    @Override
+                    public List<ItemMasterRecord> run() throws Exception {
+                        return repository.loadItems();
+                    }
+                },
+                new BackgroundTasks.Success<List<ItemMasterRecord>>() {
+                    @Override
+                    public void accept(List<ItemMasterRecord> loaded) {
+                        records.clear();
+                        records.addAll(loaded);
+                        rebuildTable();
+                        AppMessages.info(ItemMasterPanel.this, t("message.refresh.done"));
+                        logAction("ITEM_PAGE_REFRESH_SUCCESS", "rows=" + records.size());
+                    }
+                }
+        );
     }
 
     private void rebuildTable() {

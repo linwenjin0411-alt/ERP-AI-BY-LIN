@@ -5,13 +5,15 @@ import com.lin.erp.i18n.Language;
 public class UserSession {
     private final String username;
     private final String displayNameKey;
+    private final String roleCode;
     private final String roleNameKey;
     private final String companyNameKey;
     private Language language;
 
-    public UserSession(String username, String displayNameKey, String roleNameKey, String companyNameKey, Language language) {
+    public UserSession(String username, String displayNameKey, String roleCode, String roleNameKey, String companyNameKey, Language language) {
         this.username = username;
         this.displayNameKey = displayNameKey;
+        this.roleCode = roleCode;
         this.roleNameKey = roleNameKey;
         this.companyNameKey = companyNameKey;
         this.language = language;
@@ -23,6 +25,10 @@ public class UserSession {
 
     public String getDisplayNameKey() {
         return displayNameKey;
+    }
+
+    public String getRoleCode() {
+        return roleCode;
     }
 
     public String getRoleNameKey() {

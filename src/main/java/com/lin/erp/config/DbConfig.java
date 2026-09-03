@@ -1,8 +1,13 @@
 package com.lin.erp.config;
 
+import com.lin.erp.logging.AppLogger;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.IDN;
+import java.net.URLEncoder;
 import java.util.Properties;
 
 public class DbConfig {
@@ -27,8 +32,8 @@ public class DbConfig {
         database = properties.getProperty("db.database", "linova_erp").trim();
         username = properties.getProperty("db.username", "").trim();
         password = properties.getProperty("db.password", "");
-        useSsl = Boolean.parseBoolean(properties.getProperty("db.useSsl", "false"));
-        allowPublicKeyRetrieval = Boolean.parseBoolean(properties.getProperty("db.allowPublicKeyRetrieval", "true"));
+        useSsl = Boolean.parseBoolean(properties.getProperty("db.useSsl", "true"));
+        allowPublicKeyRetrieval = Boolean.parseBoolean(properties.getProperty("db.allowPublicKeyRetrieval", "false"));
         serverTimezone = properties.getProperty("db.serverTimezone", "UTC").trim();
         connectTimeoutMs = parseInt(properties.getProperty("db.connectTimeoutMs"), 3000);
         socketTimeoutMs = parseInt(properties.getProperty("db.socketTimeoutMs"), 5000);
@@ -43,7 +48,7 @@ public class DbConfig {
                 input = new FileInputStream(file);
                 properties.load(input);
             } catch (IOException e) {
-                System.err.println("[WARN] Failed to read config/db.properties: " + e.getMessage());
+                AppLogger.error("Failed to read config/db.properties.", e);
             } finally {
                 if (input != null) {
                     try {
@@ -73,12 +78,12 @@ public class DbConfig {
     }
 
     public String jdbcUrl() {
-        return "jdbc:mysql://" + host + ":" + port + "/" + database
+        return "jdbc:mysql://" + jdbcHost() + ":" + port + "/" + urlEncode(database)
                 + "?useUnicode=true"
                 + "&characterEncoding=utf8"
                 + "&useSSL=" + useSsl
                 + "&allowPublicKeyRetrieval=" + allowPublicKeyRetrieval
-                + "&serverTimezone=" + serverTimezone
+                + "&serverTimezone=" + urlEncode(serverTimezone)
                 + "&connectTimeout=" + connectTimeoutMs
                 + "&socketTimeout=" + socketTimeoutMs;
     }
@@ -95,6 +100,24 @@ public class DbConfig {
             return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
             return fallback;
+        }
+    }
+
+    private String jdbcHost() {
+        if (host.startsWith("[") && host.endsWith("]")) {
+            return host;
+        }
+        if (host.indexOf(':') >= 0) {
+            return "[" + host + "]";
+        }
+        return IDN.toASCII(host);
+    }
+
+    private String urlEncode(String value) {
+        try {
+            return URLEncoder.encode(value, "UTF-8").replace("+", "%20");
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalStateException("UTF-8 is not available.", e);
         }
     }
 }

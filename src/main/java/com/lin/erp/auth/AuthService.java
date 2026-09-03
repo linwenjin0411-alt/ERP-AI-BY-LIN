@@ -47,7 +47,7 @@ public class AuthService {
 
         if (dbConfig.isEnabled() && !dbConfig.isFallbackToDemo()) {
             AppLogger.warning("Database login unavailable and demo fallback disabled.");
-            throw new AuthException("Database login is unavailable. Check config/db.properties and the MySQL JDBC driver.");
+            throw new AuthException(I18n.t(actualLanguage, "auth.database.unavailable"));
         }
 
         AppLogger.warning("Using demo authentication fallback for user: " + normalizedUsername);
@@ -69,11 +69,12 @@ public class AuthService {
             try {
                 dbUserRepository.recordLogin(account.getUsername());
             } catch (SQLException e) {
-                System.err.println("[WARN] Failed to update last_login_at: " + e.getMessage());
+                AppLogger.error("Failed to update last_login_at.", e);
             }
             return new UserSession(
                     account.getUsername(),
                     account.getDisplayName(),
+                    account.getRoleCode(),
                     account.getRoleName(),
                     account.getCompanyName(),
                     language
@@ -82,7 +83,7 @@ public class AuthService {
             databaseReady = false;
             AppLogger.error("Database authentication failed.", e);
             if (!dbConfig.isFallbackToDemo()) {
-                throw new AuthException("Database login failed: " + e.getMessage());
+                throw new AuthException(I18n.t(language, "auth.database.failed"));
             }
             return authenticateWithDemo(normalizedUsername, password, language);
         }
@@ -106,6 +107,7 @@ public class AuthService {
         return new UserSession(
                 account.username,
                 account.displayNameKey,
+                account.roleCode,
                 account.roleNameKey,
                 account.companyNameKey,
                 language
@@ -118,6 +120,7 @@ public class AuthService {
                 normalizedUsername,
                 hashPassword(password),
                 displayNameKey,
+                roleCodeFromKey(roleNameKey),
                 roleNameKey,
                 companyNameKey
         ));
@@ -128,6 +131,16 @@ public class AuthService {
             return "";
         }
         return username.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String roleCodeFromKey(String roleNameKey) {
+        if ("role.admin".equals(roleNameKey)) {
+            return "ADMIN";
+        }
+        if ("role.planner".equals(roleNameKey)) {
+            return "PLANNER";
+        }
+        return "";
     }
 
     private byte[] hashPassword(String password) {
@@ -153,13 +166,15 @@ public class AuthService {
         private final String username;
         private final byte[] passwordHash;
         private final String displayNameKey;
+        private final String roleCode;
         private final String roleNameKey;
         private final String companyNameKey;
 
-        private Account(String username, byte[] passwordHash, String displayNameKey, String roleNameKey, String companyNameKey) {
+        private Account(String username, byte[] passwordHash, String displayNameKey, String roleCode, String roleNameKey, String companyNameKey) {
             this.username = username;
             this.passwordHash = passwordHash;
             this.displayNameKey = displayNameKey;
+            this.roleCode = roleCode;
             this.roleNameKey = roleNameKey;
             this.companyNameKey = companyNameKey;
         }

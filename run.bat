@@ -3,18 +3,25 @@ setlocal
 cd /d "%~dp0"
 set "APP_JAR=target\linova-one-erp.jar"
 set "MAVEN_REPO=build\maven-repository"
+set "JAVA_CMD=java"
+set "JAVAW_CMD=javaw"
 
-call :build_app
-if errorlevel 1 exit /b 1
+if exist "runtime\bin\java.exe" set "JAVA_CMD=%CD%\runtime\bin\java.exe"
+if exist "runtime\bin\javaw.exe" set "JAVAW_CMD=%CD%\runtime\bin\javaw.exe"
 
 if /i "%~1"=="--compile-only" (
+  call :build_app
+  if errorlevel 1 exit /b 1
   echo Compile finished.
   exit /b 0
 )
 
+call :ensure_app_jar
+if errorlevel 1 exit /b 1
+
 if /i "%~1"=="--init-db" (
   echo Initializing Linova One ERP database...
-  java -cp "%APP_JAR%" com.lin.erp.db.DatabaseSetup
+  "%JAVA_CMD%" -cp "%APP_JAR%" com.lin.erp.db.DatabaseSetup
   if errorlevel 1 (
     echo.
     echo [ERROR] Database initialization failed.
@@ -27,24 +34,36 @@ if /i "%~1"=="--init-db" (
 if /i "%~1"=="--diagnose-login" (
   echo Diagnosing Linova One ERP login...
   if "%~2"=="" (
-    java -cp "%APP_JAR%" com.lin.erp.Diagnostics --login admin admin123
+    "%JAVA_CMD%" -cp "%APP_JAR%" com.lin.erp.Diagnostics --login admin admin123
   ) else (
-    java -cp "%APP_JAR%" com.lin.erp.Diagnostics --login "%~2" "%~3"
+    "%JAVA_CMD%" -cp "%APP_JAR%" com.lin.erp.Diagnostics --login "%~2" "%~3"
   )
   if errorlevel 1 exit /b 1
   exit /b 0
 )
 
 echo Starting Linova One ERP...
+if exist "%JAVAW_CMD%" (
+  start "" "%JAVAW_CMD%" -jar "%APP_JAR%"
+  endlocal
+  exit /b 0
+)
+
 where javaw >nul 2>nul
 if errorlevel 1 (
-  java -jar "%APP_JAR%"
+  "%JAVA_CMD%" -jar "%APP_JAR%"
 ) else (
   start "" javaw -jar "%APP_JAR%"
 )
 
 endlocal
 exit /b 0
+
+:ensure_app_jar
+if exist "%APP_JAR%" exit /b 0
+echo [ERROR] Application jar was not found: %APP_JAR%
+echo Run run.bat --compile-only on a build machine before starting the ERP client.
+exit /b 1
 
 :build_app
 where mvn >nul 2>nul

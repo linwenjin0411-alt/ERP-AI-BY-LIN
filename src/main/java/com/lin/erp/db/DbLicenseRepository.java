@@ -6,6 +6,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URLEncoder;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -13,8 +17,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class DbLicenseRepository {
+    private static final int DEFAULT_API_TIMEOUT_MS = 5000;
+    private static final int DEFAULT_API_CACHE_DAYS = 30;
+
     private final DbConfig config;
 
     public DbLicenseRepository(DbConfig config) {
@@ -22,9 +31,30 @@ public class DbLicenseRepository {
     }
 
     public LicenseStatus currentStatus() throws SQLException {
+        return currentStatus("");
+    }
+
+    public LicenseStatus currentStatus(String userCode) throws SQLException {
         if (!config.isEnabled()) {
             return currentLocalStatus();
         }
+        LicenseStatus databaseStatus = currentDatabaseStatus();
+        if (databaseStatus.isValid()) {
+            LicenseStatus verified = verifyConfiguredApi(databaseStatus.getLicenseKey(), userCode);
+            if (verified.isValid()) {
+                return new LicenseStatus(true, databaseStatus.getLicenseKey(), verified.getValidUntil());
+            }
+            return verified;
+        }
+
+        LicenseStatus apiStatus = verifyConfiguredApi(null, userCode);
+        if (apiStatus.isValid()) {
+            return registerDatabaseLicense(apiStatus.getLicenseKey(), apiStatus.getValidUntil());
+        }
+        return databaseStatus;
+    }
+
+    private LicenseStatus currentDatabaseStatus() throws SQLException {
         Connection connection = null;
         PreparedStatement statement = null;
         ResultSet resultSet = null;
@@ -47,14 +77,31 @@ public class DbLicenseRepository {
     }
 
     public LicenseStatus registerLicense(String licenseKey) throws SQLException {
-        LocalDate validUntil = parseValidUntil(licenseKey);
-        if (validUntil == null || validUntil.isBefore(LocalDate.now())) {
-            return new LicenseStatus(false, licenseKey, validUntil);
+        return registerLicense(licenseKey, "");
+    }
+
+    public LicenseStatus registerLicense(String licenseKey, String userCode) throws SQLException {
+        LicenseStatus apiStatus = verifyConfiguredApi(licenseKey, userCode);
+        if (apiStatus.isValid()) {
+            LocalDate validUntil = apiStatus.getValidUntil();
+            if (!config.isEnabled()) {
+                return registerLocalLicense(apiStatus.getLicenseKey(), validUntil);
+            }
+            return registerDatabaseLicense(apiStatus.getLicenseKey(), validUntil);
         }
+
+        LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(licenseKey, false);
+        if (!verification.isValid()) {
+            return new LicenseStatus(false, licenseKey, verification.getValidUntil());
+        }
+        LocalDate validUntil = verification.getValidUntil();
         if (!config.isEnabled()) {
             return registerLocalLicense(licenseKey, validUntil);
         }
+        return registerDatabaseLicense(licenseKey, validUntil);
+    }
 
+    private LicenseStatus registerDatabaseLicense(String licenseKey, LocalDate validUntil) throws SQLException {
         Connection connection = null;
         PreparedStatement deactivate = null;
         PreparedStatement insert = null;
@@ -84,6 +131,65 @@ public class DbLicenseRepository {
         }
     }
 
+    private LicenseStatus verifyConfiguredApi(String licenseKey, String userCode) throws SQLException {
+        LicenseApiConfig apiConfig = loadLicenseApiConfig();
+        if (!apiConfig.isConfigured()) {
+            return new LicenseStatus(false, null, null);
+        }
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(apiConfig.getVerifyApiUrl(licenseKey, userCode));
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(apiConfig.getTimeoutMs());
+            connection.setReadTimeout(apiConfig.getTimeoutMs());
+            connection.setUseCaches(false);
+            int statusCode = connection.getResponseCode();
+            if (statusCode == HttpURLConnection.HTTP_OK) {
+                LocalDate validUntil = responseValidUntil(connection);
+                if (validUntil == null) {
+                    validUntil = LocalDate.now().plusDays(apiConfig.getCacheDays());
+                }
+                return new LicenseStatus(true, apiConfig.getDatabaseLicenseKey(licenseKey), validUntil);
+            }
+            return new LicenseStatus(false, apiConfig.getDatabaseLicenseKey(licenseKey), null);
+        } catch (IOException e) {
+            return new LicenseStatus(false, licenseKey, null);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private LocalDate responseValidUntil(HttpURLConnection connection) {
+        try {
+            byte[] bytes = readAll(connection.getInputStream());
+            String body = new String(bytes, StandardCharsets.UTF_8);
+            Matcher matcher = Pattern.compile("\"expires_at\"\\s*:\\s*\"(\\d{4}-\\d{2}-\\d{2})\"").matcher(body);
+            if (matcher.find()) {
+                return LocalDate.parse(matcher.group(1));
+            }
+        } catch (Exception ignored) {
+            // Cache duration is still a valid fallback when the API omits a date.
+        }
+        return null;
+    }
+
+    private byte[] readAll(java.io.InputStream input) throws IOException {
+        try {
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                output.write(buffer, 0, read);
+            }
+            return output.toByteArray();
+        } finally {
+            input.close();
+        }
+    }
+
     private LicenseStatus currentLocalStatus() throws SQLException {
         File file = localLicenseFile();
         if (!file.isFile()) {
@@ -95,8 +201,8 @@ public class DbLicenseRepository {
             input = new FileInputStream(file);
             properties.load(input);
             String key = properties.getProperty("license.key");
-            LocalDate validUntil = parseValidUntil(key);
-            return new LicenseStatus(validUntil != null && !validUntil.isBefore(LocalDate.now()), key, validUntil);
+            LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(key, false);
+            return new LicenseStatus(verification.isValid(), key, verification.getValidUntil());
         } catch (IOException e) {
             throw new SQLException("Failed to read config/license.properties: " + e.getMessage(), e);
         } finally {
@@ -140,28 +246,6 @@ public class DbLicenseRepository {
         return new File("config", "license.properties");
     }
 
-    private LocalDate parseValidUntil(String licenseKey) {
-        if (licenseKey == null) {
-            return null;
-        }
-        String normalized = licenseKey.trim().toUpperCase();
-        if (!normalized.startsWith("LINOVA-")) {
-            return null;
-        }
-        String datePart = normalized.substring("LINOVA-".length()).replace("-", "");
-        if (datePart.length() != 8) {
-            return null;
-        }
-        try {
-            int year = Integer.parseInt(datePart.substring(0, 4));
-            int month = Integer.parseInt(datePart.substring(4, 6));
-            int day = Integer.parseInt(datePart.substring(6, 8));
-            return LocalDate.of(year, month, day);
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
-
     private void ensureSchema(Connection connection) throws SQLException {
         PreparedStatement statement = null;
         try {
@@ -181,6 +265,66 @@ public class DbLicenseRepository {
             if (statement != null) {
                 statement.close();
             }
+        }
+        widenLicenseKey(connection);
+    }
+
+    private void widenLicenseKey(Connection connection) throws SQLException {
+        ResultSet columns = null;
+        PreparedStatement statement = null;
+        try {
+            columns = connection.getMetaData().getColumns(connection.getCatalog(), null, "erp_licenses", "license_key");
+            if (columns.next() && columns.getInt("COLUMN_SIZE") >= 500) {
+                return;
+            }
+            statement = connection.prepareStatement("alter table erp_licenses modify license_key varchar(500) not null");
+            statement.executeUpdate();
+        } finally {
+            if (columns != null) {
+                columns.close();
+            }
+            if (statement != null) {
+                statement.close();
+            }
+        }
+    }
+
+    private LicenseApiConfig loadLicenseApiConfig() throws SQLException {
+        File file = localLicenseFile();
+        if (!file.isFile()) {
+            return LicenseApiConfig.empty();
+        }
+        Properties properties = new Properties();
+        FileInputStream input = null;
+        try {
+            input = new FileInputStream(file);
+            properties.load(input);
+            return new LicenseApiConfig(
+                    properties.getProperty("license.verifyApiUrl", "").trim(),
+                    parseInt(properties.getProperty("license.cacheDays"), DEFAULT_API_CACHE_DAYS),
+                    parseInt(properties.getProperty("license.timeoutMs"), DEFAULT_API_TIMEOUT_MS)
+            );
+        } catch (IOException e) {
+            throw new SQLException("Failed to read config/license.properties: " + e.getMessage(), e);
+        } finally {
+            if (input != null) {
+                try {
+                    input.close();
+                } catch (IOException ignored) {
+                    // Nothing useful to do after reading the local license.
+                }
+            }
+        }
+    }
+
+    private int parseInt(String value, int fallback) {
+        if (value == null || value.trim().length() == 0) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
         }
     }
 
@@ -209,6 +353,79 @@ public class DbLicenseRepository {
         }
         if (error != null) {
             throw error;
+        }
+    }
+
+    private static final class LicenseApiConfig {
+        private final String verifyApiUrl;
+        private final int cacheDays;
+        private final int timeoutMs;
+
+        private LicenseApiConfig(String verifyApiUrl, int cacheDays, int timeoutMs) {
+            this.verifyApiUrl = verifyApiUrl;
+            this.cacheDays = cacheDays <= 0 ? DEFAULT_API_CACHE_DAYS : cacheDays;
+            this.timeoutMs = timeoutMs <= 0 ? DEFAULT_API_TIMEOUT_MS : timeoutMs;
+        }
+
+        private static LicenseApiConfig empty() {
+            return new LicenseApiConfig("", DEFAULT_API_CACHE_DAYS, DEFAULT_API_TIMEOUT_MS);
+        }
+
+        private boolean isConfigured() {
+            return verifyApiUrl.length() > 0;
+        }
+
+        private String getVerifyApiUrl(String licenseKey, String userCode) {
+            String url = verifyApiUrl;
+            String key = licenseKey == null ? "" : licenseKey.trim();
+            if (key.length() > 0) {
+                String encodedKey = urlEncode(key);
+                url = url.replace("{license_key}", encodedKey).replace("{license}", encodedKey);
+                if (!hasQueryParam(url, "license_key")) {
+                    url = appendQueryParam(url, "license_key", encodedKey);
+                }
+            }
+            if (!hasQueryParam(url, "product_code")) {
+                url = appendQueryParam(url, "product_code", "LinovaOneERP");
+            }
+            String user = userCode == null ? "" : userCode.trim();
+            if (user.length() > 0 && !hasQueryParam(url, "user_code")) {
+                url = appendQueryParam(url, "user_code", urlEncode(user));
+            }
+            return url;
+        }
+
+        private int getCacheDays() {
+            return cacheDays;
+        }
+
+        private int getTimeoutMs() {
+            return timeoutMs;
+        }
+
+        private String getDatabaseLicenseKey(String licenseKey) {
+            String key = licenseKey == null ? "" : licenseKey.trim();
+            return key.length() == 0 ? "API:" + verifyApiUrl : key;
+        }
+
+        private static boolean hasQueryParam(String url, String name) {
+            return url.toLowerCase().contains(name.toLowerCase() + "=");
+        }
+
+        private static String appendQueryParam(String url, String name, String encodedValue) {
+            String separator = url.contains("?") ? "&" : "?";
+            if (url.endsWith("?") || url.endsWith("&")) {
+                separator = "";
+            }
+            return url + separator + name + "=" + encodedValue;
+        }
+
+        private static String urlEncode(String value) {
+            try {
+                return URLEncoder.encode(value, "UTF-8");
+            } catch (IOException e) {
+                return value;
+            }
         }
     }
 }

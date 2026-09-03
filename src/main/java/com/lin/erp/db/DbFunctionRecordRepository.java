@@ -27,7 +27,7 @@ public class DbFunctionRecordRepository {
             seedIfEmpty(connection, functionCode, seedRows);
             statement = connection.prepareStatement(
                     "select id, function_code, c1, c2, c3, c4, c5, c6, c7, c8 "
-                            + "from erp_function_records where function_code = ? order by id"
+                            + "from erp_function_records where function_code = ? and active = 1 order by id"
             );
             statement.setString(1, functionCode);
             resultSet = statement.executeQuery();
@@ -74,7 +74,7 @@ public class DbFunctionRecordRepository {
             ensureSchema(connection);
             statement = connection.prepareStatement(
                     "update erp_function_records set c1 = ?, c2 = ?, c3 = ?, c4 = ?, c5 = ?, c6 = ?, c7 = ?, c8 = ? "
-                            + "where id = ?"
+                            + "where id = ? and active = 1"
             );
             bind(statement, 1, values);
             statement.setLong(9, id);
@@ -90,7 +90,7 @@ public class DbFunctionRecordRepository {
         try {
             connection = Database.connect(config);
             ensureSchema(connection);
-            statement = connection.prepareStatement("delete from erp_function_records where id = ?");
+            statement = connection.prepareStatement("update erp_function_records set active = 0 where id = ?");
             statement.setLong(1, id);
             statement.executeUpdate();
         } finally {
@@ -107,6 +107,7 @@ public class DbFunctionRecordRepository {
                             + "function_code varchar(80) not null,"
                             + "c1 varchar(255), c2 varchar(255), c3 varchar(255), c4 varchar(255),"
                             + "c5 varchar(255), c6 varchar(255), c7 varchar(255), c8 varchar(255),"
+                            + "active tinyint(1) not null default 1,"
                             + "created_at timestamp not null default current_timestamp,"
                             + "updated_at timestamp not null default current_timestamp on update current_timestamp,"
                             + "index idx_erp_function_records_code (function_code)"
@@ -118,6 +119,7 @@ public class DbFunctionRecordRepository {
                 statement.close();
             }
         }
+        DatabaseSchema.ensureColumn(connection, "erp_function_records", "active", "active tinyint(1) not null default 1");
     }
 
     private void seedIfEmpty(Connection connection, String functionCode, String[][] seedRows) throws SQLException {

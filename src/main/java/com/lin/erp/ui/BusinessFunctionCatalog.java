@@ -375,9 +375,9 @@ public final class BusinessFunctionCatalog {
                 "Authorized business pages");
         add("ADMIN_LICENSE",
                 new String[]{"column.id", "license.field.key", "license.field.validFrom", "license.field.validUntil", "column.status", "column.owner", "function.field.memo"},
-                new String[]{"LIC-260901", "LINOVA-20271231", "2026/09/01", "2027/12/31", "status.open", "owner.system", "Login validates active license before workspace opens"},
+                new String[]{"LIC-260901", "LINOVA-yyyyMMdd-signature", "2026/09/01", "2027/12/31", "status.open", "owner.system", "Login validates signed license before workspace opens"},
                 new String[]{"column.id", "license.field.key", "license.field.validFrom", "license.field.validUntil", "column.status"},
-                new String[][]{{"LIC-260901", "LINOVA-20271231", "2026-09-01", "2027-12-31", "status.open"}},
+                new String[][]{{"LIC-260901", "LINOVA-yyyyMMdd-signature", "2026-09-01", "2027-12-31", "status.open"}},
                 "License management -> Login license validation -> Workspace",
                 "System administrator license registration",
                 "Login validity check");

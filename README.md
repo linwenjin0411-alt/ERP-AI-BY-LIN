@@ -40,7 +40,7 @@ Double-click LinovaOneERP.exe
 
 Daily desktop use should start from `LinovaOneERP.exe`. It launches `run.bat` in the background without opening a command window.
 
-When `LinovaOneERP.exe` is opened, the launcher runs Maven in the background, builds `target/linova-one-erp.jar`, then starts the desktop app with `javaw`.
+When `LinovaOneERP.exe` is opened, the launcher starts the existing `target/linova-one-erp.jar` with `javaw`. It does not run Maven during daily startup.
 
 Maintenance command-line startup:
 
@@ -59,6 +59,14 @@ Rebuild the EXE launcher:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-launcher.ps1
 ```
+
+Build a delivery package:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-distribution.ps1
+```
+
+To include a local Windows JRE in the package, pass `-RuntimePath C:\path\to\jre`. The generated package is written under `build/dist/LinovaOneERP` and contains the launcher, `run.bat`, the built jar, database schema, config template, and delivery notes.
 
 Diagnose login and module loading:
 
@@ -101,22 +109,23 @@ Main navigation uses an mcframe-style three-level layout: dark root module menu,
 
 After a user ID and password are accepted, the login flow checks whether an active license is still within its valid date range. If no valid license exists, the login window shows a localized English, Simplified Chinese, or Japanese prompt and asks for a license key before opening the ERP workspace.
 
-Supported license key formats:
+Supported license key format:
 
 ```text
-LINOVA-yyyyMMdd
-LINOVA-yyyy-MM-dd
+LINOVA-yyyyMMdd-signature
 ```
 
-Example:
+The date portion is the license expiration date. The signature portion is verified with the application public key, so a plain future date is not enough to create a valid license.
 
 ```text
-LINOVA-20271231
+Example structure only: LINOVA-20271231-<signature>
 ```
 
-The date portion is treated as the license expiration date. Expired or malformed keys are rejected, and the login window remains open.
+Expired, malformed, or unsigned keys are rejected, and the login window remains open.
 
-When MySQL is enabled, licenses are stored in `erp_licenses`. When demo mode is used without MySQL, the license is stored locally in `config/license.properties`.
+When MySQL is enabled, licenses are stored in `erp_licenses`. If the database has an active unexpired license, sign-in continues without asking the user again. If no valid database license exists, the app reads `license.verifyApiUrl` from `config/license.properties`, requests that full URL, and treats HTTP 200 as a successful license verification. The result is cached back into `erp_licenses` for `license.cacheDays` days.
+
+When demo mode is used without MySQL, the license is stored locally in `config/license.properties`. This local license file is ignored by Git and must not be committed.
 
 Administrators can also open `Administration -> Security -> Roles -> License Management` / `系统管理 -> 安全权限 -> 角色 -> 许可证管理` / `システム管理 -> セキュリティ -> ロール -> ライセンス管理` to view the current license status and register a new license.
 
@@ -143,7 +152,11 @@ database: linova_erp
 username: YOUR_DB_USER
 ```
 
-Copy `config/db.properties.example` to `config/db.properties` and fill in real local connection values there. Never commit `config/db.properties`, database dumps, exported CSV files, or runtime logs.
+Copy `config/db.properties.example` to `config/db.properties` and fill in real local connection values there. Never commit `config/db.properties`, `config/license.properties`, database dumps, exported CSV files, or runtime logs.
+
+For production MySQL connections, keep `db.allowPublicKeyRetrieval=false`. Only enable it temporarily for a controlled local compatibility test when the database authentication method requires it.
+
+For production MySQL connections, keep `db.useSsl=true` and configure the database server certificate/trust settings as required by the deployment environment. Set it to `false` only for an isolated local database that does not support TLS.
 
 The schema file is:
 
@@ -171,21 +184,32 @@ The program creates these initial tables:
 
 Most screen data shown after login now comes from MySQL. This includes module names, three-level menus, toolbar actions, process flows, KPI cards, worklist tables, focus items, and item master records.
 
-## Demo Application Users
+## Initial Application User
 
-These users are seeded into MySQL by `run.bat --init-db`:
+`run.bat --init-db` no longer seeds a fixed database password. If the MySQL user table is empty, the initializer creates the first administrator account and requires an initial password.
+
+Interactive setup:
+
+```bat
+run.bat --init-db
+```
+
+Non-interactive setup:
+
+```bat
+set LINOVA_ADMIN_PASSWORD=change-this-before-use
+run.bat --init-db
+set LINOVA_ADMIN_PASSWORD=
+```
+
+The initial database account is:
 
 ```text
 User ID: admin
-Password: admin123
 Role: System Administrator
 ```
 
-```text
-User ID: planner
-Password: plan123
-Role: Production Planner
-```
+The built-in demo fallback accounts are only for local development when MySQL is disabled and must not be used for production deployment.
 
 ## Dependencies
 
@@ -195,7 +219,7 @@ Runtime dependencies are managed by Maven:
 pom.xml
 ```
 
-Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored by Git. After cloning, install JDK and Maven, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
+Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored by Git. After cloning, install JDK and Maven, run `run.bat --compile-only` on a build machine, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
 
 ## Modules
 
@@ -215,17 +239,17 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - The left navigation uses a custom Swing button style so the dark ERP menu is not overridden by the Windows native button theme.
 - User authentication now queries MySQL first.
 - `last_login_at` is updated after a successful database login.
-- `config/db.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
+- `config/db.properties`, `config/license.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
 - `LinovaOneERP.exe` starts `run.bat` hidden, so no command window is shown for daily desktop use.
 - `run.bat` builds with Maven, starts the app, and still supports `--compile-only`, `--init-db`, and `--diagnose-login` for maintenance.
+- `build-distribution.ps1` creates the formal delivery folder under `build/dist/` and can include a bundled Windows JRE through `-RuntimePath`.
 - The application uses a custom Linova ERP icon drawn in Java, so title bars no longer use the default Java icon.
+- Windows Explorer can cache an old `.exe` icon after the launcher is rebuilt. Verify the actual embedded icon from the file properties or by copying the rebuilt `LinovaOneERP.exe` to a new folder/name; refresh Explorer or clear the Windows icon cache before judging delivery screenshots.
 
   <img width="1040" height="650" alt="001_login_sign-in" src="https://github.com/user-attachments/assets/d0637711-584e-43a0-89e2-e69220d53314" />
   <img width="1040" height="650" alt="072_login_with_license_prompt" src="https://github.com/user-attachments/assets/005db6da-dff0-4833-a900-d99c9f613cee" />
   <img width="1455" height="880" alt="002_main_dashboard" src="https://github.com/user-attachments/assets/a3b2add1-81c3-427e-88ac-9aba64ad2687" />
   <img width="1455" height="880" alt="003_main_master-master-maint" src="https://github.com/user-attachments/assets/9380d098-0f62-41da-b84f-18a1c6c26594" />
-
-
 
 

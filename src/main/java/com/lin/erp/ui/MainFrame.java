@@ -5,8 +5,10 @@ import com.lin.erp.config.DbConfig;
 import com.lin.erp.db.DbItemMasterRepository;
 import com.lin.erp.db.DbMenuRepository;
 import com.lin.erp.db.DbModuleRepository;
+import com.lin.erp.db.DbRoleMenuPermissionRepository;
 import com.lin.erp.db.MenuNode;
 import com.lin.erp.db.ModulePageData;
+import com.lin.erp.db.RoleMenuPermission;
 import com.lin.erp.i18n.I18n;
 import com.lin.erp.i18n.Language;
 import com.lin.erp.logging.AppLogger;
@@ -56,6 +58,7 @@ import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +71,9 @@ public class MainFrame extends JFrame {
     private final DbModuleRepository moduleRepository;
     private final DbMenuRepository menuRepository;
     private final DbItemMasterRepository itemMasterRepository;
+    private final DbRoleMenuPermissionRepository permissionRepository;
     private final Map<String, List<MenuNode>> childMenusByModule = new LinkedHashMap<String, List<MenuNode>>();
+    private final Map<String, RoleMenuPermission> modulePermissions = new LinkedHashMap<String, RoleMenuPermission>();
 
     private ModulePageData currentModule;
     private MenuNode currentSubMenu;
@@ -95,6 +100,7 @@ public class MainFrame extends JFrame {
         this.moduleRepository = new DbModuleRepository(DbConfig.loadDefault());
         this.menuRepository = new DbMenuRepository(DbConfig.loadDefault());
         this.itemMasterRepository = new DbItemMasterRepository(DbConfig.loadDefault());
+        this.permissionRepository = new DbRoleMenuPermissionRepository(DbConfig.loadDefault());
         initializeFrame();
     }
 
@@ -104,14 +110,16 @@ public class MainFrame extends JFrame {
         this.moduleRepository = new DbModuleRepository(DbConfig.loadDefault());
         this.menuRepository = new DbMenuRepository(DbConfig.loadDefault());
         this.itemMasterRepository = new DbItemMasterRepository(DbConfig.loadDefault());
+        this.permissionRepository = new DbRoleMenuPermissionRepository(DbConfig.loadDefault());
         initializeFrame();
     }
 
     private void initializeFrame() {
+        loadSecondaryMenus();
+        applyModuleViewPermissions();
         if (!modules.isEmpty()) {
             currentModule = modules.get(0);
         }
-        loadSecondaryMenus();
         currentSubMenu = firstVisibleSubMenu(currentModule);
         AppLogger.userAction("WORKSPACE_OPEN", "user=" + session.getUsername() + " | module=" + moduleCode(currentModule));
 
@@ -141,13 +149,37 @@ public class MainFrame extends JFrame {
 
     private void loadSecondaryMenus() {
         childMenusByModule.clear();
+        boolean loadedFromDatabase = false;
         try {
-            childMenusByModule.putAll(menuRepository.loadChildrenByModule());
-            AppLogger.info("Loaded ERP secondary menus from database. Root count: " + childMenusByModule.size());
+            childMenusByModule.putAll(menuRepository.loadChildrenByModule(session.getRoleCode()));
+            loadedFromDatabase = true;
+            AppLogger.info("Loaded ERP secondary menus from database. Role: " + session.getRoleCode()
+                    + ", root count: " + childMenusByModule.size());
         } catch (SQLException e) {
             AppLogger.error("Failed to load ERP secondary menus. Fallback menus will be used.", e);
         }
-        mergeFallbackSecondaryMenus();
+        if (!loadedFromDatabase) {
+            mergeFallbackSecondaryMenus();
+        }
+    }
+
+    private void applyModuleViewPermissions() {
+        if (childMenusByModule.isEmpty()) {
+            return;
+        }
+        Iterator<ModulePageData> iterator = modules.iterator();
+        while (iterator.hasNext()) {
+            ModulePageData module = iterator.next();
+            if (!isAlwaysVisibleModule(module) && !childMenusByModule.containsKey(module.getCode())) {
+                AppLogger.info("Module hidden by role menu permissions. Role: " + session.getRoleCode()
+                        + ", module: " + module.getCode());
+                iterator.remove();
+            }
+        }
+    }
+
+    private boolean isAlwaysVisibleModule(ModulePageData module) {
+        return module != null && "DASHBOARD".equals(module.getCode());
     }
 
     private void mergeFallbackSecondaryMenus() {
@@ -1170,6 +1202,11 @@ public class MainFrame extends JFrame {
                     BorderFactory.createLineBorder(i == 0 ? AppTheme.ACCENT : AppTheme.BORDER),
                     AppTheme.emptyBorder(9, 15, 9, 15)
             ));
+            boolean allowed = isToolbarActionAllowed(actionKey);
+            button.setEnabled(allowed);
+            if (!allowed) {
+                button.setToolTipText(t("message.permission.denied"));
+            }
             button.addActionListener(new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
@@ -1183,6 +1220,9 @@ public class MainFrame extends JFrame {
 
     private void handleToolbarAction(String actionKey) {
         logUserAction("TOOLBAR_ACTION_CLICK", "action=" + actionKey + " | actionName=" + english(actionKey));
+        if (!ensureToolbarActionAllowed(actionKey)) {
+            return;
+        }
         if ("action.refresh".equals(actionKey)) {
             refreshFromDatabase();
         } else if ("action.new".equals(actionKey)) {
@@ -1204,21 +1244,67 @@ public class MainFrame extends JFrame {
         }
     }
 
+    private boolean ensureToolbarActionAllowed(String actionKey) {
+        if (isToolbarActionAllowed(actionKey)) {
+            return true;
+        }
+        logUserAction("TOOLBAR_ACTION_DENIED", "module=" + moduleCode(currentModule) + " | action=" + actionKey);
+        AppMessages.error(this, t("message.error.title"), t("message.permission.denied"));
+        return false;
+    }
+
+    private boolean isToolbarActionAllowed(String actionKey) {
+        return currentModulePermission().allows(actionKey);
+    }
+
+    private RoleMenuPermission currentModulePermission() {
+        if (currentModule == null) {
+            return RoleMenuPermission.viewOnly("NONE");
+        }
+        String moduleCode = currentModule.getCode();
+        if (isAlwaysVisibleModule(currentModule)) {
+            return RoleMenuPermission.viewOnly(moduleCode);
+        }
+        RoleMenuPermission cached = modulePermissions.get(moduleCode);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            RoleMenuPermission permission = permissionRepository.loadForModule(session.getRoleCode(), moduleCode);
+            modulePermissions.put(moduleCode, permission);
+            return permission;
+        } catch (SQLException e) {
+            AppLogger.error("Module permission load failed.", e);
+            RoleMenuPermission viewOnly = RoleMenuPermission.viewOnly(moduleCode);
+            modulePermissions.put(moduleCode, viewOnly);
+            return viewOnly;
+        }
+    }
+
     private void refreshFromDatabase() {
         logUserAction("PAGE_REFRESH_START", "source=database");
-        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        try {
-            reloadModulesKeepingCurrent();
-            refreshTexts();
-            logUserAction("PAGE_REFRESH_SUCCESS", "source=database");
-            AppMessages.info(this, t("message.refresh.done"));
-        } catch (SQLException e) {
-            AppLogger.error("Refresh failed.", e);
-            logUserAction("PAGE_REFRESH_FAILURE", "errorType=" + e.getClass().getSimpleName());
-            AppMessages.error(this, t("message.error.title"), t("message.refresh.failed"));
-        } finally {
-            setCursor(Cursor.getDefaultCursor());
-        }
+        final String currentCode = moduleCode(currentModule);
+        BackgroundTasks.run(
+                this,
+                "Refresh failed.",
+                t("message.error.title"),
+                t("message.refresh.failed"),
+                new BackgroundTasks.Work<List<ModulePageData>>() {
+                    @Override
+                    public List<ModulePageData> run() throws Exception {
+                        return moduleRepository.loadModules();
+                    }
+                },
+                new BackgroundTasks.Success<List<ModulePageData>>() {
+                    @Override
+                    public void accept(List<ModulePageData> reloaded) {
+                        applyReloadedModules(currentCode, reloaded);
+                        refreshTexts();
+                        logUserAction("PAGE_REFRESH_SUCCESS", "source=database");
+                        AppMessages.info(MainFrame.this, t("message.refresh.done"));
+                    }
+                }
+        );
     }
 
     private void openRecordForm(boolean editMode) {
@@ -1271,32 +1357,40 @@ public class MainFrame extends JFrame {
             return;
         }
 
-        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        try {
-            if (editMode) {
-                int sortOrder = currentModule.getTableRowSortOrders().get(modelRow).intValue();
-                logUserAction("FORM_SAVE_SUBMIT", "mode=EDIT | sortOrder=" + sortOrder + " | record=" + values[0]);
-                moduleRepository.updateTableRow(currentModule.getCode(), sortOrder, values);
-                AppLogger.info("Updated ERP row. Module: " + currentModule.getCode() + ", sortOrder: " + sortOrder);
-                logUserAction("FORM_SAVE_SUCCESS", "mode=EDIT | sortOrder=" + sortOrder + " | record=" + values[0]);
-                AppMessages.success(this, t("message.edit.success"));
-            } else {
-                logUserAction("FORM_SAVE_SUBMIT", "mode=CREATE | record=" + values[0]);
-                int sortOrder = moduleRepository.insertTableRow(currentModule.getCode(), values);
-                AppLogger.info("Created ERP row. Module: " + currentModule.getCode() + ", sortOrder: " + sortOrder);
-                logUserAction("FORM_SAVE_SUCCESS", "mode=CREATE | sortOrder=" + sortOrder + " | record=" + values[0]);
-                AppMessages.success(this, t("message.create.success"));
-            }
-            reloadModulesKeepingCurrent();
-            refreshTexts();
-        } catch (SQLException e) {
-            AppLogger.error("Save failed.", e);
-            logUserAction("FORM_SAVE_FAILURE", "mode=" + (editMode ? "EDIT" : "CREATE")
-                    + " | errorType=" + e.getClass().getSimpleName());
-            AppMessages.error(this, t("message.error.title"), t("message.save.failed"));
-        } finally {
-            setCursor(Cursor.getDefaultCursor());
-        }
+        final ModulePageData targetModule = currentModule;
+        final int targetRow = modelRow;
+        BackgroundTasks.run(
+                this,
+                "Save failed.",
+                t("message.error.title"),
+                t("message.save.failed"),
+                new BackgroundTasks.Work<List<ModulePageData>>() {
+                    @Override
+                    public List<ModulePageData> run() throws Exception {
+                        if (editMode) {
+                            int sortOrder = targetModule.getTableRowSortOrders().get(targetRow).intValue();
+                            logUserAction("FORM_SAVE_SUBMIT", "mode=EDIT | sortOrder=" + sortOrder + " | record=" + values[0]);
+                            moduleRepository.updateTableRow(targetModule.getCode(), sortOrder, values);
+                            AppLogger.info("Updated ERP row. Module: " + targetModule.getCode() + ", sortOrder: " + sortOrder);
+                            logUserAction("FORM_SAVE_SUCCESS", "mode=EDIT | sortOrder=" + sortOrder + " | record=" + values[0]);
+                        } else {
+                            logUserAction("FORM_SAVE_SUBMIT", "mode=CREATE | record=" + values[0]);
+                            int sortOrder = moduleRepository.insertTableRow(targetModule.getCode(), values);
+                            AppLogger.info("Created ERP row. Module: " + targetModule.getCode() + ", sortOrder: " + sortOrder);
+                            logUserAction("FORM_SAVE_SUCCESS", "mode=CREATE | sortOrder=" + sortOrder + " | record=" + values[0]);
+                        }
+                        return moduleRepository.loadModules();
+                    }
+                },
+                new BackgroundTasks.Success<List<ModulePageData>>() {
+                    @Override
+                    public void accept(List<ModulePageData> reloaded) {
+                        applyReloadedModules(targetModule.getCode(), reloaded);
+                        refreshTexts();
+                        AppMessages.success(MainFrame.this, editMode ? t("message.edit.success") : t("message.create.success"));
+                    }
+                }
+        );
     }
 
     private void runStatusAction(String actionKey) {
@@ -1328,29 +1422,39 @@ public class MainFrame extends JFrame {
             return;
         }
 
-        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        try {
-            int sortOrder = currentModule.getTableRowSortOrders().get(modelRow).intValue();
-            logUserAction("WORKFLOW_ACTION_SUBMIT", "action=" + actionKey
-                    + " | sortOrder=" + sortOrder
-                    + " | record=" + selectedRecordName(modelRow)
-                    + " | targetStatus=" + english(targetStatus));
-            moduleRepository.updateTableRowStatus(currentModule.getCode(), sortOrder, statusColumnIndex, targetStatus);
-            AppLogger.info("Updated ERP row status. Module: " + currentModule.getCode()
-                    + ", sortOrder: " + sortOrder + ", status: " + targetStatus);
-            reloadModulesKeepingCurrent();
-            refreshTexts();
-            logUserAction("WORKFLOW_ACTION_SUCCESS", "action=" + actionKey
-                    + " | sortOrder=" + sortOrder
-                    + " | targetStatus=" + english(targetStatus));
-            AppMessages.success(this, successMessageFor(actionKey));
-        } catch (SQLException e) {
-            AppLogger.error("Status update failed.", e);
-            logUserAction("WORKFLOW_ACTION_FAILURE", "action=" + actionKey + " | errorType=" + e.getClass().getSimpleName());
-            AppMessages.error(this, t("message.error.title"), t("message.status.failed"));
-        } finally {
-            setCursor(Cursor.getDefaultCursor());
-        }
+        final ModulePageData targetModule = currentModule;
+        final int targetRow = modelRow;
+        BackgroundTasks.run(
+                this,
+                "Status update failed.",
+                t("message.error.title"),
+                t("message.status.failed"),
+                new BackgroundTasks.Work<List<ModulePageData>>() {
+                    @Override
+                    public List<ModulePageData> run() throws Exception {
+                        int sortOrder = targetModule.getTableRowSortOrders().get(targetRow).intValue();
+                        logUserAction("WORKFLOW_ACTION_SUBMIT", "action=" + actionKey
+                                + " | sortOrder=" + sortOrder
+                                + " | record=" + selectedRecordName(targetRow)
+                                + " | targetStatus=" + english(targetStatus));
+                        moduleRepository.updateTableRowStatus(targetModule.getCode(), sortOrder, statusColumnIndex, targetStatus);
+                        AppLogger.info("Updated ERP row status. Module: " + targetModule.getCode()
+                                + ", sortOrder: " + sortOrder + ", status: " + targetStatus);
+                        return moduleRepository.loadModules();
+                    }
+                },
+                new BackgroundTasks.Success<List<ModulePageData>>() {
+                    @Override
+                    public void accept(List<ModulePageData> reloaded) {
+                        applyReloadedModules(targetModule.getCode(), reloaded);
+                        refreshTexts();
+                        logUserAction("WORKFLOW_ACTION_SUCCESS", "action=" + actionKey
+                                + " | row=" + targetRow
+                                + " | targetStatus=" + english(targetStatus));
+                        AppMessages.success(MainFrame.this, successMessageFor(actionKey));
+                    }
+                }
+        );
     }
 
     private void exportCurrentTable() {
@@ -1426,6 +1530,10 @@ public class MainFrame extends JFrame {
     private void reloadModulesKeepingCurrent() throws SQLException {
         String currentCode = currentModule == null ? null : currentModule.getCode();
         List<ModulePageData> reloaded = moduleRepository.loadModules();
+        applyReloadedModules(currentCode, reloaded);
+    }
+
+    private void applyReloadedModules(String currentCode, List<ModulePageData> reloaded) {
         modules.clear();
         modules.addAll(reloaded);
 

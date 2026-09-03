@@ -23,7 +23,7 @@ public class DbUserRepository {
         try {
             connection = Database.connect(config);
             statement = connection.prepareStatement(
-                    "select u.username, u.password_hash, u.display_name, r.name as role_name, c.name as company_name "
+                    "select u.username, u.password_hash, u.display_name, r.code as role_code, r.name as role_name, c.name as company_name "
                             + "from erp_users u "
                             + "join erp_roles r on r.id = u.role_id "
                             + "join erp_companies c on c.id = u.company_id "
@@ -40,6 +40,7 @@ public class DbUserRepository {
                     resultSet.getString("username"),
                     resultSet.getString("password_hash"),
                     resultSet.getString("display_name"),
+                    resultSet.getString("role_code"),
                     resultSet.getString("role_name"),
                     resultSet.getString("company_name")
             );
@@ -74,17 +75,64 @@ public class DbUserRepository {
         }
     }
 
+    public int countUsers() throws SQLException {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        ResultSet resultSet = null;
+        try {
+            connection = Database.connect(config);
+            statement = connection.prepareStatement("select count(*) from erp_users");
+            resultSet = statement.executeQuery();
+            return resultSet.next() ? resultSet.getInt(1) : 0;
+        } finally {
+            if (resultSet != null) {
+                resultSet.close();
+            }
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+
+    public void createInitialAdmin(String passwordHash) throws SQLException {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        try {
+            connection = Database.connect(config);
+            statement = connection.prepareStatement(
+                    "insert into erp_users (username, password_hash, display_name, email, company_id, role_id, active) "
+                            + "select 'admin', ?, 'System Administrator', 'admin@linova.local', c.id, r.id, 1 "
+                            + "from erp_companies c, erp_roles r "
+                            + "where c.code = 'LINOVA' and r.code = 'ADMIN'"
+            );
+            statement.setString(1, passwordHash);
+            statement.executeUpdate();
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+
     public static class DbAccount {
         private final String username;
         private final String passwordHash;
         private final String displayName;
+        private final String roleCode;
         private final String roleName;
         private final String companyName;
 
-        public DbAccount(String username, String passwordHash, String displayName, String roleName, String companyName) {
+        public DbAccount(String username, String passwordHash, String displayName, String roleCode, String roleName, String companyName) {
             this.username = username;
             this.passwordHash = passwordHash;
             this.displayName = displayName;
+            this.roleCode = roleCode;
             this.roleName = roleName;
             this.companyName = companyName;
         }
@@ -99,6 +147,10 @@ public class DbUserRepository {
 
         public String getDisplayName() {
             return displayName;
+        }
+
+        public String getRoleCode() {
+            return roleCode;
         }
 
         public String getRoleName() {
