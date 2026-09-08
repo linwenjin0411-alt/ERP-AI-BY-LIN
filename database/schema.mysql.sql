@@ -162,15 +162,25 @@ create table if not exists erp_function_records (
   index idx_erp_function_records_code (function_code)
 ) engine=InnoDB default charset=utf8mb4;
 
+create table if not exists erp_business_statuses (
+  code varchar(80) primary key,
+  name varchar(120) not null,
+  status_group varchar(40) not null,
+  sort_order int not null default 0,
+  active tinyint(1) not null default 1,
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp
+) engine=InnoDB default charset=utf8mb4;
+
 create table if not exists erp_purchase_documents (
   id bigint primary key auto_increment,
   document_type varchar(40) not null,
   document_no varchar(80) not null,
   status varchar(80),
   item_code varchar(80),
-  quantity varchar(40),
+  quantity decimal(18,4),
   supplier_code varchar(160),
-  due_date varchar(40),
+  due_date date,
   next_action varchar(120),
   memo varchar(255),
   active tinyint(1) not null default 1,
@@ -186,7 +196,7 @@ create table if not exists erp_purchase_document_lines (
   document_id bigint not null,
   line_no int not null default 10,
   item_code varchar(80),
-  quantity varchar(40),
+  quantity decimal(18,4),
   warehouse_code varchar(80),
   lot_no varchar(80),
   active tinyint(1) not null default 1,
@@ -200,9 +210,12 @@ create table if not exists erp_sales_documents (
   document_type varchar(40) not null,
   document_no varchar(80) not null,
   customer_code varchar(160),
-  amount varchar(80),
+  amount decimal(18,2),
+  currency_code varchar(3) not null default 'JPY',
+  tax_rate decimal(7,4) not null default 0,
+  exchange_rate decimal(18,8) not null default 1,
   status varchar(80),
-  due_date varchar(40),
+  due_date date,
   next_action varchar(120),
   memo varchar(255),
   external_ref varchar(120),
@@ -219,7 +232,7 @@ create table if not exists erp_sales_document_lines (
   document_id bigint not null,
   line_no int not null default 10,
   item_code varchar(80),
-  quantity varchar(40),
+  quantity decimal(18,4),
   warehouse_code varchar(80),
   lot_no varchar(80),
   active tinyint(1) not null default 1,
@@ -233,9 +246,9 @@ create table if not exists erp_manufacturing_documents (
   document_type varchar(40) not null,
   document_no varchar(80) not null,
   item_code varchar(80),
-  quantity varchar(40),
+  quantity decimal(18,4),
   status varchar(80),
-  due_date varchar(40),
+  due_date date,
   risk_code varchar(80),
   bom_code varchar(80),
   warehouse_code varchar(80),
@@ -253,7 +266,7 @@ create table if not exists erp_inventory_records (
   document_type varchar(40) not null,
   item_code varchar(80) not null,
   warehouse_code varchar(80),
-  quantity varchar(40),
+  quantity decimal(18,4),
   status varchar(80),
   risk_code varchar(80),
   next_action varchar(120),
@@ -271,16 +284,36 @@ create table if not exists erp_bom_components (
   bom_code varchar(80) not null,
   parent_item_code varchar(80) not null,
   component_item_code varchar(80) not null,
-  quantity_per varchar(40) not null,
-  scrap_rate varchar(40),
-  effective_from varchar(40),
-  effective_to varchar(40),
+  quantity_per decimal(18,6) not null,
+  scrap_rate decimal(7,4),
+  effective_from date,
+  effective_to date,
   active tinyint(1) not null default 1,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp,
   unique key uk_erp_bom_components_line (bom_code, parent_item_code, component_item_code),
   index idx_erp_bom_components_parent (parent_item_code),
   index idx_erp_bom_components_component (component_item_code)
+) engine=InnoDB default charset=utf8mb4;
+
+create table if not exists erp_inventory_movements (
+  id bigint primary key auto_increment,
+  source_table varchar(80) not null,
+  source_id bigint not null,
+  document_type varchar(40) not null,
+  document_no varchar(80) not null,
+  item_code varchar(80),
+  warehouse_code varchar(80),
+  lot_no varchar(80),
+  movement_qty decimal(18,4) not null default 0,
+  movement_date date,
+  status varchar(80),
+  active tinyint(1) not null default 1,
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp,
+  unique key uk_erp_inventory_movements_source (source_table, source_id),
+  index idx_erp_inventory_movements_item_wh (item_code, warehouse_code),
+  index idx_erp_inventory_movements_date (movement_date)
 ) engine=InnoDB default charset=utf8mb4;
 
 create table if not exists erp_licenses (
@@ -301,6 +334,19 @@ insert into erp_roles (code, name, active) values
 ('ADMIN', 'System Administrator', 1),
 ('PLANNER', 'Production Planner', 1)
 on duplicate key update name = values(name), active = values(active);
+
+insert into erp_business_statuses (code, name, status_group, sort_order, active) values
+('status.draft', 'Draft', 'DOCUMENT', 10, 1),
+('status.open', 'Open', 'DOCUMENT', 20, 1),
+('status.waitingApproval', 'Waiting Approval', 'DOCUMENT', 30, 1),
+('status.ready', 'Ready', 'DOCUMENT', 40, 1),
+('status.released', 'Released', 'DOCUMENT', 50, 1),
+('status.posted', 'Posted', 'DOCUMENT', 60, 1),
+('status.closed', 'Closed', 'DOCUMENT', 70, 1),
+('status.cancelled', 'Cancelled', 'DOCUMENT', 80, 1),
+('status.shortage', 'Shortage', 'RISK', 10, 1),
+('status.blocked', 'Blocked', 'RISK', 20, 1)
+on duplicate key update name = values(name), status_group = values(status_group), sort_order = values(sort_order), active = values(active);
 
 insert into erp_modules (code, title_key, subtitle_key, page_type, table_title_key, process_title_key, focus_title_key, prompt_value, sort_order, active) values
 ('DASHBOARD', 'module.dashboard', 'dashboard.subtitle', 'DASHBOARD', 'table.sample', 'dashboard.process.title', 'dashboard.alerts.title', null, 10, 1),
