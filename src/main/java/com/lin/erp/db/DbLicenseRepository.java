@@ -81,12 +81,18 @@ public class DbLicenseRepository {
     }
 
     public LicenseStatus registerLicense(String licenseKey, String userCode) throws SQLException {
+        if (!config.isEnabled()) {
+            String normalized = licenseKey == null ? "" : licenseKey.trim();
+            if (normalized.length() == 0) {
+                return new LicenseStatus(false, licenseKey, null);
+            }
+            LocalDate validUntil = LocalDate.now().plusDays(loadLicenseApiConfig().getCacheDays());
+            return registerLocalLicense(normalized, validUntil);
+        }
+
         LicenseStatus apiStatus = verifyConfiguredApi(licenseKey, userCode);
         if (apiStatus.isValid()) {
             LocalDate validUntil = apiStatus.getValidUntil();
-            if (!config.isEnabled()) {
-                return registerLocalLicense(apiStatus.getLicenseKey(), validUntil);
-            }
             return registerDatabaseLicense(apiStatus.getLicenseKey(), validUntil);
         }
 
@@ -95,9 +101,6 @@ public class DbLicenseRepository {
             return new LicenseStatus(false, licenseKey, verification.getValidUntil());
         }
         LocalDate validUntil = verification.getValidUntil();
-        if (!config.isEnabled()) {
-            return registerLocalLicense(licenseKey, validUntil);
-        }
         return registerDatabaseLicense(licenseKey, validUntil);
     }
 
@@ -201,6 +204,14 @@ public class DbLicenseRepository {
             input = new FileInputStream(file);
             properties.load(input);
             String key = properties.getProperty("license.key");
+            if (!config.isEnabled()) {
+                LocalDate validUntil = parseLocalDate(properties.getProperty("license.validUntil"), null);
+                if (validUntil == null) {
+                    validUntil = LocalDate.now().plusDays(parseInt(properties.getProperty("license.cacheDays"), DEFAULT_API_CACHE_DAYS));
+                }
+                boolean valid = key != null && key.trim().length() > 0 && !validUntil.isBefore(LocalDate.now());
+                return new LicenseStatus(valid, key, validUntil);
+            }
             LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(key, false);
             return new LicenseStatus(verification.isValid(), key, verification.getValidUntil());
         } catch (IOException e) {
@@ -223,7 +234,25 @@ public class DbLicenseRepository {
             throw new SQLException("Failed to create config directory for local license.");
         }
         Properties properties = new Properties();
+        if (file.isFile()) {
+            FileInputStream input = null;
+            try {
+                input = new FileInputStream(file);
+                properties.load(input);
+            } catch (IOException e) {
+                throw new SQLException("Failed to read config/license.properties: " + e.getMessage(), e);
+            } finally {
+                if (input != null) {
+                    try {
+                        input.close();
+                    } catch (IOException ignored) {
+                        // Nothing useful to do after reading the local license.
+                    }
+                }
+            }
+        }
         properties.setProperty("license.key", licenseKey.trim());
+        properties.setProperty("license.validUntil", validUntil.toString());
         FileOutputStream output = null;
         try {
             output = new FileOutputStream(file);
@@ -324,6 +353,17 @@ public class DbLicenseRepository {
         try {
             return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private LocalDate parseLocalDate(String value, LocalDate fallback) {
+        if (value == null || value.trim().length() == 0) {
+            return fallback;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (Exception e) {
             return fallback;
         }
     }
