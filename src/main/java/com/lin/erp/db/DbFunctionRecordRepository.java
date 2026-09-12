@@ -16,9 +16,19 @@ import java.util.List;
 
 public class DbFunctionRecordRepository {
     private final DbConfig config;
+    private final String auditUser;
+    private final String auditCompany;
+    private final String auditRole;
 
     public DbFunctionRecordRepository(DbConfig config) {
+        this(config, "system", "LINOVA", "SYSTEM");
+    }
+
+    public DbFunctionRecordRepository(DbConfig config, String auditUser, String auditCompany, String auditRole) {
         this.config = config;
+        this.auditUser = auditUser == null ? "system" : auditUser;
+        this.auditCompany = auditCompany == null ? "LINOVA" : auditCompany;
+        this.auditRole = auditRole == null ? "SYSTEM" : auditRole;
     }
 
     public List<FunctionRecord> loadRecords(String functionCode, String[][] seedRows) throws SQLException {
@@ -69,7 +79,11 @@ public class DbFunctionRecordRepository {
             bind(statement, 2, values);
             statement.executeUpdate();
             keys = statement.getGeneratedKeys();
-            return keys.next() ? keys.getLong(1) : -1;
+            long generatedId = keys.next() ? keys.getLong(1) : -1;
+            if (generatedId > 0) {
+                recordOperationLog(connection, functionCode, generatedId, "CREATE", "SUCCESS", "Generic function record created.");
+            }
+            return generatedId;
         } finally {
             if (keys != null) {
                 keys.close();
@@ -96,6 +110,7 @@ public class DbFunctionRecordRepository {
             bind(statement, 1, values);
             statement.setLong(9, id);
             statement.executeUpdate();
+            recordOperationLog(connection, "erp_function_records", id, "UPDATE", "SUCCESS", "Generic function record updated.");
         } finally {
             close(null, statement, connection);
         }
@@ -115,6 +130,7 @@ public class DbFunctionRecordRepository {
             statement = connection.prepareStatement("update erp_function_records set active = 0 where id = ?");
             statement.setLong(1, id);
             statement.executeUpdate();
+            recordOperationLog(connection, "erp_function_records", id, "DELETE", "SUCCESS", "Generic function record deactivated.");
         } finally {
             close(null, statement, connection);
         }
@@ -184,6 +200,7 @@ public class DbFunctionRecordRepository {
             long generatedId = keys.next() ? keys.getLong(1) : -1;
             if (generatedId > 0) {
                 syncInventoryMovement(connection, mapping, generatedId, values, true);
+                recordOperationLog(connection, mapping.functionCode, generatedId, "CREATE", "SUCCESS", "Business record created.");
                 return mapping.encodeId(generatedId);
             }
             return -1;
@@ -209,6 +226,7 @@ public class DbFunctionRecordRepository {
             statement.setLong(9, mapping.decodeId(encodedId));
             statement.executeUpdate();
             syncInventoryMovement(connection, mapping, mapping.decodeId(encodedId), values, true);
+            recordOperationLog(connection, mapping.functionCode, mapping.decodeId(encodedId), "UPDATE", "SUCCESS", "Business record updated.");
         } finally {
             close(null, statement, connection);
         }
@@ -227,6 +245,7 @@ public class DbFunctionRecordRepository {
             statement.setLong(1, mapping.decodeId(encodedId));
             statement.executeUpdate();
             syncInventoryMovement(connection, mapping, mapping.decodeId(encodedId), null, false);
+            recordOperationLog(connection, mapping.functionCode, mapping.decodeId(encodedId), "DELETE", "SUCCESS", "Business record deactivated.");
         } finally {
             close(null, statement, connection);
         }
@@ -285,6 +304,29 @@ public class DbFunctionRecordRepository {
                 + "created_at timestamp not null default current_timestamp,"
                 + "updated_at timestamp not null default current_timestamp on update current_timestamp"
                 + ") engine=InnoDB default charset=utf8mb4");
+        execute(connection, "create table if not exists erp_business_status_transitions ("
+                + "from_status varchar(80) not null,"
+                + "to_status varchar(80) not null,"
+                + "action_code varchar(40) not null,"
+                + "sort_order int not null default 0,"
+                + "active tinyint(1) not null default 1,"
+                + "created_at timestamp not null default current_timestamp,"
+                + "primary key (from_status, to_status, action_code)"
+                + ") engine=InnoDB default charset=utf8mb4");
+        execute(connection, "create table if not exists erp_business_operation_logs ("
+                + "id bigint primary key auto_increment,"
+                + "actor_user varchar(80) not null,"
+                + "company_code varchar(120),"
+                + "role_code varchar(80),"
+                + "function_code varchar(80) not null,"
+                + "record_id bigint,"
+                + "action_code varchar(40) not null,"
+                + "result_code varchar(40) not null,"
+                + "details varchar(500),"
+                + "created_at timestamp not null default current_timestamp,"
+                + "index idx_erp_business_operation_logs_target (function_code, record_id),"
+                + "index idx_erp_business_operation_logs_actor (actor_user, created_at)"
+                + ") engine=InnoDB default charset=utf8mb4");
         execute(connection, "create table if not exists erp_purchase_documents ("
                 + "id bigint primary key auto_increment,"
                 + "document_type varchar(40) not null,"
@@ -295,6 +337,7 @@ public class DbFunctionRecordRepository {
                 + "supplier_code varchar(160),"
                 + "due_date date,"
                 + "next_action varchar(120),"
+                + "original_document_no varchar(80),"
                 + "memo varchar(255),"
                 + "active tinyint(1) not null default 1,"
                 + "created_at timestamp not null default current_timestamp,"
@@ -330,6 +373,7 @@ public class DbFunctionRecordRepository {
                 + "next_action varchar(120),"
                 + "memo varchar(255),"
                 + "external_ref varchar(120),"
+                + "original_document_no varchar(80),"
                 + "active tinyint(1) not null default 1,"
                 + "created_at timestamp not null default current_timestamp,"
                 + "updated_at timestamp not null default current_timestamp on update current_timestamp,"
@@ -362,6 +406,7 @@ public class DbFunctionRecordRepository {
                 + "bom_code varchar(80),"
                 + "warehouse_code varchar(80),"
                 + "next_action varchar(120),"
+                + "original_document_no varchar(80),"
                 + "active tinyint(1) not null default 1,"
                 + "created_at timestamp not null default current_timestamp,"
                 + "updated_at timestamp not null default current_timestamp on update current_timestamp,"
@@ -391,14 +436,19 @@ public class DbFunctionRecordRepository {
                 + "bom_code varchar(80) not null,"
                 + "parent_item_code varchar(80) not null,"
                 + "component_item_code varchar(80) not null,"
+                + "bom_version varchar(40) not null default '1',"
+                + "alternate_item_code varchar(80),"
+                + "operation_code varchar(80),"
                 + "quantity_per decimal(18,6) not null,"
                 + "scrap_rate decimal(7,4),"
+                + "operation_scrap_rate decimal(7,4),"
+                + "process_consumption decimal(18,6),"
                 + "effective_from date,"
                 + "effective_to date,"
                 + "active tinyint(1) not null default 1,"
                 + "created_at timestamp not null default current_timestamp,"
                 + "updated_at timestamp not null default current_timestamp on update current_timestamp,"
-                + "unique key uk_erp_bom_components_line (bom_code, parent_item_code, component_item_code),"
+                + "unique key uk_erp_bom_components_line (bom_code, bom_version, parent_item_code, component_item_code),"
                 + "index idx_erp_bom_components_parent (parent_item_code),"
                 + "index idx_erp_bom_components_component (component_item_code)"
                 + ") engine=InnoDB default charset=utf8mb4");
@@ -421,11 +471,54 @@ public class DbFunctionRecordRepository {
                 + "index idx_erp_inventory_movements_item_wh (item_code, warehouse_code),"
                 + "index idx_erp_inventory_movements_date (movement_date)"
                 + ") engine=InnoDB default charset=utf8mb4");
+        execute(connection, "create table if not exists erp_business_partners ("
+                + "id bigint primary key auto_increment,"
+                + "partner_code varchar(80) not null,"
+                + "partner_type varchar(40) not null,"
+                + "partner_name varchar(180) not null,"
+                + "address varchar(300),"
+                + "contact_name varchar(120),"
+                + "payment_terms varchar(80),"
+                + "tax_area varchar(80),"
+                + "currency_code varchar(3) not null default 'JPY',"
+                + "credit_limit decimal(18,2),"
+                + "active tinyint(1) not null default 1,"
+                + "created_at timestamp not null default current_timestamp,"
+                + "updated_at timestamp not null default current_timestamp on update current_timestamp,"
+                + "unique key uk_erp_business_partners_code (partner_type, partner_code)"
+                + ") engine=InnoDB default charset=utf8mb4");
+        execute(connection, "create table if not exists erp_warehouse_masters ("
+                + "id bigint primary key auto_increment,"
+                + "warehouse_code varchar(80) not null unique,"
+                + "warehouse_name varchar(180) not null,"
+                + "plant_code varchar(40) not null,"
+                + "zone_code varchar(80),"
+                + "bin_code varchar(80),"
+                + "inbound_policy varchar(120),"
+                + "outbound_policy varchar(120),"
+                + "lot_control tinyint(1) not null default 1,"
+                + "active tinyint(1) not null default 1,"
+                + "created_at timestamp not null default current_timestamp,"
+                + "updated_at timestamp not null default current_timestamp on update current_timestamp"
+                + ") engine=InnoDB default charset=utf8mb4");
         DatabaseSchema.ensureColumn(connection, "erp_manufacturing_documents", "risk_code", "risk_code varchar(80)");
+        DatabaseSchema.ensureColumn(connection, "erp_manufacturing_documents", "original_document_no", "original_document_no varchar(80)");
+        DatabaseSchema.ensureColumn(connection, "erp_purchase_documents", "original_document_no", "original_document_no varchar(80)");
+        DatabaseSchema.ensureColumn(connection, "erp_sales_documents", "original_document_no", "original_document_no varchar(80)");
         DatabaseSchema.ensureColumn(connection, "erp_sales_documents", "currency_code", "currency_code varchar(3) not null default 'JPY'");
         DatabaseSchema.ensureColumn(connection, "erp_sales_documents", "tax_rate", "tax_rate decimal(7,4) not null default 0");
         DatabaseSchema.ensureColumn(connection, "erp_sales_documents", "exchange_rate", "exchange_rate decimal(18,8) not null default 1");
+        DatabaseSchema.ensureColumn(connection, "erp_item_masters", "purchase_enabled", "purchase_enabled tinyint(1) not null default 1");
+        DatabaseSchema.ensureColumn(connection, "erp_item_masters", "sales_enabled", "sales_enabled tinyint(1) not null default 1");
+        DatabaseSchema.ensureColumn(connection, "erp_item_masters", "production_enabled", "production_enabled tinyint(1) not null default 1");
+        DatabaseSchema.ensureColumn(connection, "erp_item_masters", "inventory_enabled", "inventory_enabled tinyint(1) not null default 1");
+        DatabaseSchema.ensureColumn(connection, "erp_bom_components", "bom_version", "bom_version varchar(40) not null default '1'");
+        DatabaseSchema.ensureColumn(connection, "erp_bom_components", "alternate_item_code", "alternate_item_code varchar(80)");
+        DatabaseSchema.ensureColumn(connection, "erp_bom_components", "operation_code", "operation_code varchar(80)");
+        DatabaseSchema.ensureColumn(connection, "erp_bom_components", "operation_scrap_rate", "operation_scrap_rate decimal(7,4)");
+        DatabaseSchema.ensureColumn(connection, "erp_bom_components", "process_consumption", "process_consumption decimal(18,6)");
         seedStatuses(connection);
+        seedStatusTransitions(connection);
     }
 
     private void seedStatuses(Connection connection) throws SQLException {
@@ -455,6 +548,63 @@ public class DbFunctionRecordRepository {
                 statement.setInt(4, Integer.parseInt(rows[i][3]));
                 statement.executeUpdate();
             }
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+        }
+    }
+
+    private void seedStatusTransitions(Connection connection) throws SQLException {
+        String[][] rows = {
+                {"status.draft", "status.open", "OPEN", "10"},
+                {"status.open", "status.waitingApproval", "REQUEST_APPROVAL", "20"},
+                {"status.waitingApproval", "status.open", "REJECT", "30"},
+                {"status.open", "status.released", "RELEASE", "40"},
+                {"status.released", "status.posted", "POST", "50"},
+                {"status.posted", "status.closed", "CLOSE", "60"},
+                {"status.open", "status.cancelled", "CANCEL", "70"},
+                {"status.released", "status.cancelled", "CANCEL", "80"}
+        };
+        PreparedStatement statement = null;
+        try {
+            statement = connection.prepareStatement(
+                    "insert into erp_business_status_transitions (from_status, to_status, action_code, sort_order, active) "
+                            + "values (?, ?, ?, ?, 1) on duplicate key update "
+                            + "sort_order = values(sort_order), active = 1"
+            );
+            for (int i = 0; i < rows.length; i++) {
+                statement.setString(1, rows[i][0]);
+                statement.setString(2, rows[i][1]);
+                statement.setString(3, rows[i][2]);
+                statement.setInt(4, Integer.parseInt(rows[i][3]));
+                statement.executeUpdate();
+            }
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+        }
+    }
+
+    private void recordOperationLog(Connection connection, String functionCode, long recordId,
+                                    String actionCode, String resultCode, String details) throws SQLException {
+        PreparedStatement statement = null;
+        try {
+            statement = connection.prepareStatement(
+                    "insert into erp_business_operation_logs "
+                            + "(actor_user, company_code, role_code, function_code, record_id, action_code, result_code, details) "
+                            + "values (?, ?, ?, ?, ?, ?, ?, ?)"
+            );
+            statement.setString(1, auditUser);
+            statement.setString(2, auditCompany);
+            statement.setString(3, auditRole);
+            statement.setString(4, functionCode);
+            statement.setLong(5, recordId);
+            statement.setString(6, actionCode);
+            statement.setString(7, resultCode);
+            statement.setString(8, details);
+            statement.executeUpdate();
         } finally {
             if (statement != null) {
                 statement.close();
@@ -1003,7 +1153,41 @@ public class DbFunctionRecordRepository {
                 bindDate(statement, index, value);
                 return;
             }
+            if (STATUS.equals(type)) {
+                bindText(statement, index, normalizeStatus(value));
+                return;
+            }
             bindText(statement, index, value);
+        }
+
+        private String normalizeStatus(String value) {
+            if (value == null || value.trim().length() == 0) {
+                return null;
+            }
+            String trimmed = value.trim();
+            if (trimmed.startsWith("status.") || trimmed.startsWith("risk.")) {
+                return trimmed;
+            }
+            String lower = trimmed.toLowerCase();
+            if ("draft".equals(lower)) {
+                return "status.draft";
+            }
+            if ("open".equals(lower)) {
+                return "status.open";
+            }
+            if ("released".equals(lower)) {
+                return "status.released";
+            }
+            if ("posted".equals(lower)) {
+                return "status.posted";
+            }
+            if ("closed".equals(lower)) {
+                return "status.closed";
+            }
+            if ("cancelled".equals(lower) || "canceled".equals(lower)) {
+                return "status.cancelled";
+            }
+            return "status.open";
         }
     }
 
