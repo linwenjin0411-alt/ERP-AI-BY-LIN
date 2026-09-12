@@ -3,6 +3,8 @@
 
 # Linova One ERP
 
+Languages: [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+
 `Linova One ERP` is a Java PC desktop ERP prototype for manufacturing companies.
 
 The name keeps `Lin` as the project identity, uses `nova` for a clean innovation feeling, and uses `One` to express an integrated ERP workspace.
@@ -13,13 +15,26 @@ The name keeps `Lin` as the project identity, uses `nova` for a clean innovation
 - Default language: English
 - UI languages: English, Simplified Chinese, Japanese
 - Login page with language switcher
-- License validation before the workspace opens
+- License validation before the workspace opens, with online API verification and offline signed-key fallback
 - ERP cockpit after login
 - SAP / mcframe inspired modules and process flow
 - MySQL-backed user, company, role, menu, and role-menu tables
 - MySQL-backed module pages, actions, process steps, KPI cards, worklist columns, worklist rows, and focus items
+- Independent business tables for procurement, sales, manufacturing, inventory, BOM, partners, and warehouses
+- Generated inventory ledger for stock-changing business documents
+- Business status master, workflow transition model, and operation audit log foundation
+- Read-only query, report, AI, and stock-ledger pages with filter, sort, refresh, and export
+- MRP, production costing, approval queue, report, and AI context pages
 - Automatic database initialization
 - One-click startup with `LinovaOneERP.exe`
+
+## System Overview
+
+Linova One ERP is a desktop ERP prototype focused on manufacturing operations. It covers master data, procurement, sales, inventory, manufacturing, finance, reports, AI-assisted inquiry, administration, and license management.
+
+The system is designed as a modular workspace. Users sign in, pass license validation, then work from an mcframe-style multi-level menu. Function pages share a consistent CRUD experience while using business-specific fields and tables where available.
+
+Core business data is stored in MySQL. The current model includes item master, BOM, customer/supplier master, warehouse master, procurement documents, sales documents, manufacturing documents, inventory records, generated inventory ledger, business statuses, workflow transitions, and operation audit logs.
 
 ## Run
 
@@ -105,11 +120,36 @@ Normal messages, such as sign-in success or operation completion, appear as smal
 
 Main navigation uses an mcframe-style three-level layout: dark root module menu, secondary business-area rail, and a function-button grid with teal section headers. Clicking a function opens a separate desktop window. `Master Data -> Master Maintenance -> Item Master Management` opens the item master window backed by `erp_item_masters`, with create, edit, delete, refresh, and CSV export actions.
 
+Business pages use a unified mcframe-style work screen: toolbar actions, searchable and sortable tables, side context, document numbering rule, organization/period context, and CSV export. Query, report, AI, and inventory ledger pages are read-only by design.
+
 ## License
 
-After a user ID and password are accepted, the login flow checks whether an active license is still within its valid date range. If no valid license exists, the login window shows a localized English, Simplified Chinese, or Japanese prompt and asks for a license key before opening the ERP workspace.
+After a user ID and password are accepted, the login flow validates the license before opening the ERP workspace. If no valid license exists, the login window shows a localized English, Simplified Chinese, or Japanese prompt and asks for a license key.
 
-Supported license key format:
+License validation supports two modes:
+
+- Online API verification through `license.verifyApiUrl`
+- Offline signed license verification
+
+For normal deployment, configure the online verification API in:
+
+```text
+config/license.properties
+```
+
+Example:
+
+```text
+license.verifyApiUrl=https://your-license-server.example/api.php?action=verify
+license.cacheDays=30
+license.timeoutMs=5000
+```
+
+The application automatically appends `product_code=LinovaOneERP`, `user_code`, and, when entered by the user, `license_key`.
+
+When MySQL is enabled, license records are cached in `erp_licenses`. If an active unexpired license exists, the application confirms it with the configured API before allowing login. If no valid license exists or verification fails, the login window asks the user to enter a license key.
+
+Offline signed licenses use this format:
 
 ```text
 LINOVA-yyyyMMdd-signature
@@ -123,11 +163,15 @@ Example structure only: LINOVA-20271231-<signature>
 
 Expired, malformed, or unsigned keys are rejected, and the login window remains open.
 
-When MySQL is enabled, licenses are stored in `erp_licenses`. If the database has an active unexpired license, sign-in continues without asking the user again. If no valid database license exists, the app reads `license.verifyApiUrl` from `config/license.properties`, requests that full URL, and treats HTTP 200 as a successful license verification. The result is cached back into `erp_licenses` for `license.cacheDays` days.
+`config/license.properties` is the local license configuration file. It can hold the API endpoint and, in demo/offline mode, a locally cached license key. This local license file is ignored by Git and must not be committed.
 
-When demo mode is used without MySQL, the license is stored locally in `config/license.properties`. This local license file is ignored by Git and must not be committed.
+Administrators can also open the license page to view the current license status and register a new license:
 
-Administrators can also open `Administration -> Security -> Roles -> License Management` / `系统管理 -> 安全权限 -> 角色 -> 许可证管理` / `システム管理 -> セキュリティ -> ロール -> ライセンス管理` to view the current license status and register a new license.
+```text
+Administration -> Security -> Roles -> License Management
+系统管理 -> 安全权限 -> 角色 -> 许可证管理
+システム管理 -> セキュリティ -> ロール -> ライセンス管理
+```
 
 ## MySQL
 
@@ -164,25 +208,18 @@ The schema file is:
 database/schema.mysql.sql
 ```
 
-The program creates these initial tables:
+The schema includes these main table groups:
 
-- `erp_companies`
-- `erp_roles`
-- `erp_users`
-- `erp_menus`
-- `erp_role_menus`
-- `erp_modules`
-- `erp_module_actions`
-- `erp_module_process_steps`
-- `erp_module_metrics`
-- `erp_module_table_columns`
-- `erp_module_table_rows`
-- `erp_module_focus_items`
-- `erp_item_masters`
-- `erp_function_records`
-- `erp_licenses`
+- Security: `erp_users`, `erp_roles`, `erp_role_menus`
+- Organization and menu: `erp_companies`, `erp_menus`, `erp_modules`
+- Module metadata: `erp_module_actions`, `erp_module_process_steps`, `erp_module_metrics`, `erp_module_table_columns`, `erp_module_table_rows`, `erp_module_focus_items`
+- Master data: `erp_item_masters`, `erp_business_partners`, `erp_warehouse_masters`, `erp_bom_components`
+- Business documents: `erp_purchase_documents`, `erp_purchase_document_lines`, `erp_sales_documents`, `erp_sales_document_lines`, `erp_manufacturing_documents`, `erp_inventory_records`
+- Inventory movement: `erp_inventory_movements`
+- Workflow and audit: `erp_business_statuses`, `erp_business_status_transitions`, `erp_business_operation_logs`
+- Generic fallback and license: `erp_function_records`, `erp_licenses`
 
-Most screen data shown after login now comes from MySQL. This includes module names, three-level menus, toolbar actions, process flows, KPI cards, worklist tables, focus items, and item master records.
+Most navigation, module metadata, item master data, license data, and core business worklist records are persisted in MySQL. Some prototype defaults are still seeded automatically when business tables are empty.
 
 ## Initial Application User
 
@@ -242,14 +279,19 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - `config/db.properties`, `config/license.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
 - `LinovaOneERP.exe` starts `run.bat` hidden, so no command window is shown for daily desktop use.
-- `run.bat` builds with Maven, starts the app, and still supports `--compile-only`, `--init-db`, and `--diagnose-login` for maintenance.
+- `run.bat` normally starts the existing jar. Maven build is only run through `run.bat --compile-only`.
+- `run.bat` also supports `--init-db` and `--diagnose-login` for maintenance.
 - `build-distribution.ps1` creates the formal delivery folder under `build/dist/` and can include a bundled Windows JRE through `-RuntimePath`.
 - The application uses a custom Linova ERP icon drawn in Java, so title bars no longer use the default Java icon.
 - Windows Explorer can cache an old `.exe` icon after the launcher is rebuilt. Verify the actual embedded icon from the file properties or by copying the rebuilt `LinovaOneERP.exe` to a new folder/name; refresh Explorer or clear the Windows icon cache before judging delivery screenshots.
 
-  <img width="1040" height="650" alt="001_login_sign-in" src="https://github.com/user-attachments/assets/d0637711-584e-43a0-89e2-e69220d53314" />
-  <img width="1040" height="650" alt="072_login_with_license_prompt" src="https://github.com/user-attachments/assets/005db6da-dff0-4833-a900-d99c9f613cee" />
-  <img width="1455" height="880" alt="002_main_dashboard" src="https://github.com/user-attachments/assets/a3b2add1-81c3-427e-88ac-9aba64ad2687" />
-  <img width="1455" height="880" alt="003_main_master-master-maint" src="https://github.com/user-attachments/assets/9380d098-0f62-41da-b84f-18a1c6c26594" />
+## Screenshots
+
+The following screenshots show the sign-in flow, license prompt, main dashboard, and master menu page.
+
+<img width="1040" height="650" alt="001_login_sign-in" src="https://github.com/user-attachments/assets/d0637711-584e-43a0-89e2-e69220d53314" />
+<img width="1040" height="650" alt="072_login_with_license_prompt" src="https://github.com/user-attachments/assets/005db6da-dff0-4833-a900-d99c9f613cee" />
+<img width="1455" height="880" alt="002_main_dashboard" src="https://github.com/user-attachments/assets/a3b2add1-81c3-427e-88ac-9aba64ad2687" />
+<img width="1455" height="880" alt="003_main_master-master-maint" src="https://github.com/user-attachments/assets/9380d098-0f62-41da-b84f-18a1c6c26594" />
 
 
