@@ -3,7 +3,7 @@
 
 # Linova One ERP
 
-语言：[简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [English](README.md)
+语言：[English](README.md) | [日本語](README.ja.md) | **简体中文**
 
 `Linova One ERP` 是面向制造业公司的 Java PC 桌面 ERP 原型系统。
 
@@ -13,7 +13,7 @@
 
 - Java Swing 桌面应用
 - 默认语言：英文
-- UI 语言：英文、简体中文、日文
+- UI 语言：英文、日文、简体中文
 - 带语言切换的登录画面
 - 打开工作台前进行 License 校验，支持在线 API 验证和离线签名 License 回退
 - 登录后的 ERP Cockpit 工作台
@@ -45,7 +45,7 @@ Linova One ERP 是面向制造业业务的桌面 ERP 原型。当前覆盖主数
 - FlatLaf
 - MySQL Connector/J
 
-`target/` 和 `build/` 下的生成文件已被 Git 忽略，可以随时重新生成。
+`target/` 和 `build/` 下的生成文件属于构建输出，可以随时重新生成。
 
 静默桌面启动：
 
@@ -108,13 +108,13 @@ logs/YYYYMMDD/
 - `logs/YYYYMMDD/app-YYYYMMDD-HHMMSS-SSS-PID.log`：应用事件、登录流程、数据库查询错误、未捕获异常
 - `logs/YYYYMMDD/console-YYYYMMDD-HHMMSS-SSS-PID.log`：`javaw` 重定向后的标准输出/错误
 
-日志文件已被 Git 忽略，但项目中保留 `logs` 文件夹。
+日志文件会写入本地，`logs` 文件夹作为项目运行目录结构的一部分保留。
 每次启动都会创建新的 UTF-8 日志文件，因此历史运行日志会保留用于故障排查，不会被覆盖。
 用户操作会以英文写入日志，并带有 `>>> USER_ACTION` 前缀，包括登录、页面点击、工具栏动作、表单保存、流程确认和导出。
 
 ## 桌面 UI
 
-应用使用 Swing 和 FlatLaf。依赖由 Maven 从 `pom.xml` 解析，jar 文件不提交到仓库。
+应用使用 Swing 和 FlatLaf。依赖由 Maven 从 `pom.xml` 解析，应用 jar 会在构建时生成。
 
 普通消息，例如登录成功或操作完成，会以小型 toast 窗口显示，并在 3 秒后关闭。错误消息使用阻塞式提示框，直到用户确认为止。
 
@@ -163,7 +163,7 @@ Example structure only: LINOVA-20271231-<signature>
 
 已过期、格式错误或未签名的 key 会被拒绝，登录窗口保持打开。
 
-`config/license.properties` 是本地 License 配置文件。它可以保存 API endpoint，也可以在 demo/offline 模式下保存本地缓存的 License key。该本地 License 文件已被 Git 忽略，不能提交。
+`config/license.properties` 是本地 License 配置文件。它可以保存 API endpoint，也可以在 demo/offline 模式下保存本地缓存的 License key。请将该文件视为按环境维护的运行时配置。
 
 管理员也可以打开 License 页面查看当前 License 状态并登记新的 License：
 
@@ -181,7 +181,7 @@ Administration -> Security -> Roles -> License Management
 config/db.properties
 ```
 
-该文件包含敏感信息，因此已被 Git 忽略。提交到仓库的模板是：
+该文件用于保存按环境填写的连接值。配置模板是：
 
 ```text
 config/db.properties.example
@@ -196,7 +196,7 @@ database: linova_erp
 username: YOUR_DB_USER
 ```
 
-将 `config/db.properties.example` 复制为 `config/db.properties`，并填写真实的本地连接值。不要提交 `config/db.properties`、`config/license.properties`、数据库 dump、导出的 CSV 文件或运行日志。
+将 `config/db.properties.example` 复制为 `config/db.properties`，并填写真实的本地连接值。
 
 生产 MySQL 连接应保持 `db.allowPublicKeyRetrieval=false`。只有在受控的本地兼容性测试中，且数据库认证方式确实需要时，才临时开启。
 
@@ -256,7 +256,7 @@ Role: System Administrator
 pom.xml
 ```
 
-jar 文件、`build/` 构建输出和 `target/` Maven 输出已被 Git 忽略。克隆后，在构建机器上安装 JDK 和 Maven，运行 `run.bat --compile-only`，将 `config/db.properties.example` 复制为 `config/db.properties`，填写真实数据库值，然后运行 `run.bat --init-db` 或双击 `LinovaOneERP.exe`。
+应用 jar、`build/` 构建输出和 `target/` Maven 输出会在本地生成。克隆后，在构建机器上安装 JDK 和 Maven，运行 `run.bat --compile-only`，将 `config/db.properties.example` 复制为 `config/db.properties`，填写真实数据库值，然后运行 `run.bat --init-db` 或双击 `LinovaOneERP.exe`。
 
 ## 模块
 
@@ -276,7 +276,7 @@ jar 文件、`build/` 构建输出和 `target/` Maven 输出已被 Git 忽略。
 - 左侧导航使用自定义 Swing 按钮样式，避免深色 ERP 菜单被 Windows 原生按钮主题覆盖。
 - 用户认证优先查询 MySQL。
 - 成功数据库登录后会更新 `last_login_at`。
-- `config/db.properties`、`config/license.properties`、运行日志、导出文件、数据库 dump、本地 SQL 数据文件和 jar 文件不会提交。
+- 按环境维护的配置、运行日志、导出文件、数据库 dump、本地 SQL 数据文件和生成的 jar 属于本地运行产物。
 - 主工作台使用更柔和的浅色导航和卡片风格，以贴近现代 ERP / AI 时代的观感。
 - `LinovaOneERP.exe` 会隐藏启动 `run.bat`，因此日常桌面使用不会显示命令行窗口。
 - `run.bat` 默认启动现有 jar。Maven 构建只通过 `run.bat --compile-only` 执行。

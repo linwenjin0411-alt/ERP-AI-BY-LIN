@@ -3,7 +3,7 @@
 
 # Linova One ERP
 
-Languages: [English](README.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
+Languages: **English** | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 `Linova One ERP` is a Java PC desktop ERP prototype for manufacturing companies.
 
@@ -13,7 +13,7 @@ The name keeps `Lin` as the project identity, uses `nova` for a clean innovation
 
 - Java Swing desktop application
 - Default language: English
-- UI languages: English, Simplified Chinese, Japanese
+- UI languages: English, Japanese, Simplified Chinese
 - Login page with language switcher
 - License validation before the workspace opens, with online API verification and offline signed-key fallback
 - ERP cockpit after login
@@ -45,7 +45,7 @@ On the first run, Maven downloads the open-source dependencies declared in `pom.
 - FlatLaf
 - MySQL Connector/J
 
-Generated files under `target/` and `build/` are ignored by Git and can be recreated at any time.
+Generated files under `target/` and `build/` are build outputs and can be recreated at any time.
 
 Silent desktop startup:
 
@@ -108,13 +108,13 @@ Useful files:
 - `logs/YYYYMMDD/app-YYYYMMDD-HHMMSS-SSS-PID.log`: application events, sign-in flow, database query errors, uncaught exceptions
 - `logs/YYYYMMDD/console-YYYYMMDD-HHMMSS-SSS-PID.log`: redirected standard output/error from `javaw`
 
-Log files are ignored by Git, but the `logs` folder is kept in the project.
+Log files are written locally, while the `logs` folder remains part of the project layout.
 Every startup creates new UTF-8 log files, so previous runs are kept for troubleshooting and are not overwritten.
 User operations are written in English with the `>>> USER_ACTION` prefix, including login, page clicks, toolbar actions, form saves, workflow confirmations, and exports.
 
 ## Desktop UI
 
-The application uses Swing with FlatLaf. Dependencies are resolved by Maven from `pom.xml`; jar files are not committed.
+The application uses Swing with FlatLaf. Dependencies are resolved by Maven from `pom.xml`; application jars are generated during build.
 
 Normal messages, such as sign-in success or operation completion, appear as small toast windows and close after 3 seconds. Error messages use blocking alert dialogs and stay open until confirmed.
 
@@ -163,7 +163,7 @@ Example structure only: LINOVA-20271231-<signature>
 
 Expired, malformed, or unsigned keys are rejected, and the login window remains open.
 
-`config/license.properties` is the local license configuration file. It can hold the API endpoint and, in demo/offline mode, a locally cached license key. This local license file is ignored by Git and must not be committed.
+`config/license.properties` is the local license configuration file. It can hold the API endpoint and, in demo/offline mode, a locally cached license key. Treat this file as environment-specific runtime configuration.
 
 Administrators can also open the license page to view the current license status and register a new license:
 
@@ -181,7 +181,7 @@ The application reads local database settings from:
 config/db.properties
 ```
 
-This file is ignored by Git because it contains secrets. The committed template is:
+This file stores environment-specific connection values. The template is:
 
 ```text
 config/db.properties.example
@@ -196,7 +196,7 @@ database: linova_erp
 username: YOUR_DB_USER
 ```
 
-Copy `config/db.properties.example` to `config/db.properties` and fill in real local connection values there. Never commit `config/db.properties`, `config/license.properties`, database dumps, exported CSV files, or runtime logs.
+Copy `config/db.properties.example` to `config/db.properties` and fill in real local connection values there.
 
 For production MySQL connections, keep `db.allowPublicKeyRetrieval=false`. Only enable it temporarily for a controlled local compatibility test when the database authentication method requires it.
 
@@ -256,7 +256,7 @@ Runtime dependencies are managed by Maven:
 pom.xml
 ```
 
-Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored by Git. After cloning, install JDK and Maven, run `run.bat --compile-only` on a build machine, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
+Application jars, build outputs in `build/`, and Maven outputs in `target/` are generated locally. After cloning, install JDK and Maven, run `run.bat --compile-only` on a build machine, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
 
 ## Modules
 
@@ -276,7 +276,7 @@ Jar files, build outputs in `build/`, and Maven outputs in `target/` are ignored
 - The left navigation uses a custom Swing button style so the dark ERP menu is not overridden by the Windows native button theme.
 - User authentication now queries MySQL first.
 - `last_login_at` is updated after a successful database login.
-- `config/db.properties`, `config/license.properties`, runtime logs, exports, database dumps, local SQL data files, and jar files are intentionally not committed.
+- Environment-specific configuration, runtime logs, exports, database dumps, local SQL data files, and generated jars are local runtime artifacts.
 - The main workspace uses a softer light navigation and card style for a more modern ERP / AI-era feel.
 - `LinovaOneERP.exe` starts `run.bat` hidden, so no command window is shown for daily desktop use.
 - `run.bat` normally starts the existing jar. Maven build is only run through `run.bat --compile-only`.
