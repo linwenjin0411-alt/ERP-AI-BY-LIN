@@ -3,7 +3,7 @@
 
 # Linova One ERP
 
-Languages: [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+Languages: [English](README.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 `Linova One ERP` is a Java PC desktop ERP prototype for manufacturing companies.
 

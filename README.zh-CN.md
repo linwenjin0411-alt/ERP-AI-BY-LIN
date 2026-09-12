@@ -3,7 +3,7 @@
 
 # Linova One ERP
 
-语言：[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+语言：[简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [English](README.md)
 
 `Linova One ERP` 是面向制造业公司的 Java PC 桌面 ERP 原型系统。
 
