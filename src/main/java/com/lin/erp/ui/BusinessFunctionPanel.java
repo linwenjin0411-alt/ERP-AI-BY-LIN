@@ -18,11 +18,16 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
+import javax.swing.RowFilter;
 import javax.swing.border.CompoundBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
+import javax.swing.table.TableRowSorter;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
@@ -57,6 +62,8 @@ public class BusinessFunctionPanel extends JPanel {
 
     private JTable table;
     private DefaultTableModel tableModel;
+    private TableRowSorter<DefaultTableModel> tableSorter;
+    private JTextField filterField;
     private JLabel countLabel;
     private JLabel totalLabel;
     private JLabel openLabel;
@@ -68,7 +75,7 @@ public class BusinessFunctionPanel extends JPanel {
         this.session = session;
         this.function = function;
         this.definition = BusinessFunctionCatalog.forFunction(function);
-        this.repository = new DbFunctionRecordRepository(DbConfig.loadDefault());
+        this.repository = new DbFunctionRecordRepository(DbConfig.loadDefault(), session.getUsername(), session.getCompanyNameKey(), session.getRoleCode());
         this.permission = loadPermission(function.getCode());
         setOpaque(false);
         add(createToolbar(), BorderLayout.NORTH);
@@ -95,6 +102,26 @@ public class BusinessFunctionPanel extends JPanel {
 
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
+        filterField = new JTextField(18);
+        filterField.putClientProperty("JTextField.placeholderText", "Filter");
+        filterField.setBorder(AppTheme.emptyBorder(8, 10, 8, 10));
+        filterField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+        });
+        actions.add(filterField);
         actions.add(createActionButton("action.new", "action.new"));
         actions.add(createActionButton("action.edit", "action.edit"));
         actions.add(createActionButton("action.delete", "action.delete"));
@@ -120,10 +147,13 @@ public class BusinessFunctionPanel extends JPanel {
             button.setBackground(Color.WHITE);
             button.setForeground(AppTheme.TEXT_PRIMARY);
         }
-        boolean allowed = permission.allows(actionKey);
+        boolean mutableAction = "action.new".equals(actionKey) || "action.edit".equals(actionKey) || "action.delete".equals(actionKey);
+        boolean allowed = permission.allows(actionKey) && !(definition.isReadOnly() && mutableAction);
         button.setEnabled(allowed);
         if (!allowed) {
-            button.setToolTipText(t("message.permission.denied"));
+            button.setToolTipText(definition.isReadOnly() && mutableAction
+                    ? "Read-only page"
+                    : t("message.permission.denied"));
         }
         button.addActionListener(new ActionListener() {
             @Override
@@ -157,6 +187,8 @@ public class BusinessFunctionPanel extends JPanel {
             }
         };
         table = new JTable(tableModel);
+        tableSorter = new TableRowSorter<DefaultTableModel>(tableModel);
+        table.setRowSorter(tableSorter);
         table.setRowHeight(34);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setFillsViewportHeight(true);
@@ -210,6 +242,11 @@ public class BusinessFunctionPanel extends JPanel {
         list.add(contextRow(t("function.context.flow"), definition.getFlow()));
         list.add(contextRow(t("function.context.upstream"), definition.getUpstream()));
         list.add(contextRow(t("function.context.downstream"), definition.getDownstream()));
+        list.add(contextRow("Numbering rule", definition.getNumberingRule()));
+        list.add(contextRow("Organization / Period", definition.getOrganizationPeriod()));
+        if (definition.isReadOnly()) {
+            list.add(contextRow("Mode", "Read-only query/export page"));
+        }
         side.add(list, BorderLayout.CENTER);
         return side;
     }
@@ -267,6 +304,11 @@ public class BusinessFunctionPanel extends JPanel {
 
     private boolean ensureActionAllowed(String actionKey) {
         if (permission.allows(actionKey)) {
+            if (definition.isReadOnly()
+                    && ("action.new".equals(actionKey) || "action.edit".equals(actionKey) || "action.delete".equals(actionKey))) {
+                AppMessages.error(owner, t("message.error.title"), "This page is read-only. Use filter, sort, refresh, or export.");
+                return false;
+            }
             return true;
         }
         logAction("FUNCTION_ACTION_DENIED", "function=" + function.getCode()
@@ -413,6 +455,8 @@ public class BusinessFunctionPanel extends JPanel {
             rows[i] = localized(records.get(i).getValues());
         }
         tableModel.setDataVector(rows, localized(definition.getTableColumnKeys()));
+        tableSorter.setModel(tableModel);
+        applyFilter();
         countLabel.setText(t("item.count.prefix") + records.size());
         if (records.size() > 0) {
             table.setRowSelectionInterval(0, 0);
@@ -473,7 +517,20 @@ public class BusinessFunctionPanel extends JPanel {
         if (table == null || table.getSelectedRow() < 0) {
             return -1;
         }
-        return table.convertRowIndexToModel(table.getSelectedRow());
+        int viewRow = table.getSelectedRow();
+        return table.convertRowIndexToModel(viewRow);
+    }
+
+    private void applyFilter() {
+        if (tableSorter == null || filterField == null) {
+            return;
+        }
+        String filter = filterField.getText();
+        if (filter == null || filter.trim().length() == 0) {
+            tableSorter.setRowFilter(null);
+            return;
+        }
+        tableSorter.setRowFilter(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(filter.trim())));
     }
 
     private String[] createDefaultFormValues() {

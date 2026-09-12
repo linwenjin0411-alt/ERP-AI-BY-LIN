@@ -8,10 +8,21 @@ public class BusinessFunctionDefinition {
     private final String flow;
     private final String upstream;
     private final String downstream;
+    private final String numberingRule;
+    private final String organizationPeriod;
+    private final boolean readOnly;
 
     public BusinessFunctionDefinition(String[] fieldKeys, String[] defaultValues,
                                       String[] tableColumnKeys, String[][] tableRows,
                                       String flow, String upstream, String downstream) {
+        this(fieldKeys, defaultValues, tableColumnKeys, tableRows, flow, upstream, downstream,
+                "DOC-{module}-{yyMMdd}-{sequence}", "LINOVA / FY2026-08", false);
+    }
+
+    public BusinessFunctionDefinition(String[] fieldKeys, String[] defaultValues,
+                                      String[] tableColumnKeys, String[][] tableRows,
+                                      String flow, String upstream, String downstream,
+                                      String numberingRule, String organizationPeriod, boolean readOnly) {
         this.fieldKeys = fieldKeys;
         this.defaultValues = defaultValues;
         this.tableColumnKeys = tableColumnKeys;
@@ -19,6 +30,9 @@ public class BusinessFunctionDefinition {
         this.flow = flow;
         this.upstream = upstream;
         this.downstream = downstream;
+        this.numberingRule = numberingRule;
+        this.organizationPeriod = organizationPeriod;
+        this.readOnly = readOnly;
     }
 
     public String[] getFieldKeys() {
@@ -47,5 +61,17 @@ public class BusinessFunctionDefinition {
 
     public String getDownstream() {
         return downstream;
+    }
+
+    public String getNumberingRule() {
+        return numberingRule;
+    }
+
+    public String getOrganizationPeriod() {
+        return organizationPeriod;
+    }
+
+    public boolean isReadOnly() {
+        return readOnly;
     }
 }

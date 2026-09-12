@@ -140,6 +140,10 @@ create table if not exists erp_item_masters (
   status varchar(80) not null,
   safety_stock varchar(40),
   lead_time_days varchar(40),
+  purchase_enabled tinyint(1) not null default 1,
+  sales_enabled tinyint(1) not null default 1,
+  production_enabled tinyint(1) not null default 1,
+  inventory_enabled tinyint(1) not null default 1,
   active tinyint(1) not null default 1,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp
@@ -172,6 +176,31 @@ create table if not exists erp_business_statuses (
   updated_at timestamp not null default current_timestamp on update current_timestamp
 ) engine=InnoDB default charset=utf8mb4;
 
+create table if not exists erp_business_status_transitions (
+  from_status varchar(80) not null,
+  to_status varchar(80) not null,
+  action_code varchar(40) not null,
+  sort_order int not null default 0,
+  active tinyint(1) not null default 1,
+  created_at timestamp not null default current_timestamp,
+  primary key (from_status, to_status, action_code)
+) engine=InnoDB default charset=utf8mb4;
+
+create table if not exists erp_business_operation_logs (
+  id bigint primary key auto_increment,
+  actor_user varchar(80) not null,
+  company_code varchar(120),
+  role_code varchar(80),
+  function_code varchar(80) not null,
+  record_id bigint,
+  action_code varchar(40) not null,
+  result_code varchar(40) not null,
+  details varchar(500),
+  created_at timestamp not null default current_timestamp,
+  index idx_erp_business_operation_logs_target (function_code, record_id),
+  index idx_erp_business_operation_logs_actor (actor_user, created_at)
+) engine=InnoDB default charset=utf8mb4;
+
 create table if not exists erp_purchase_documents (
   id bigint primary key auto_increment,
   document_type varchar(40) not null,
@@ -182,6 +211,7 @@ create table if not exists erp_purchase_documents (
   supplier_code varchar(160),
   due_date date,
   next_action varchar(120),
+  original_document_no varchar(80),
   memo varchar(255),
   active tinyint(1) not null default 1,
   created_at timestamp not null default current_timestamp,
@@ -219,6 +249,7 @@ create table if not exists erp_sales_documents (
   next_action varchar(120),
   memo varchar(255),
   external_ref varchar(120),
+  original_document_no varchar(80),
   active tinyint(1) not null default 1,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp,
@@ -253,6 +284,7 @@ create table if not exists erp_manufacturing_documents (
   bom_code varchar(80),
   warehouse_code varchar(80),
   next_action varchar(120),
+  original_document_no varchar(80),
   active tinyint(1) not null default 1,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp,
@@ -284,14 +316,19 @@ create table if not exists erp_bom_components (
   bom_code varchar(80) not null,
   parent_item_code varchar(80) not null,
   component_item_code varchar(80) not null,
+  bom_version varchar(40) not null default '1',
+  alternate_item_code varchar(80),
+  operation_code varchar(80),
   quantity_per decimal(18,6) not null,
   scrap_rate decimal(7,4),
+  operation_scrap_rate decimal(7,4),
+  process_consumption decimal(18,6),
   effective_from date,
   effective_to date,
   active tinyint(1) not null default 1,
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp,
-  unique key uk_erp_bom_components_line (bom_code, parent_item_code, component_item_code),
+  unique key uk_erp_bom_components_line (bom_code, bom_version, parent_item_code, component_item_code),
   index idx_erp_bom_components_parent (parent_item_code),
   index idx_erp_bom_components_component (component_item_code)
 ) engine=InnoDB default charset=utf8mb4;
@@ -314,6 +351,38 @@ create table if not exists erp_inventory_movements (
   unique key uk_erp_inventory_movements_source (source_table, source_id),
   index idx_erp_inventory_movements_item_wh (item_code, warehouse_code),
   index idx_erp_inventory_movements_date (movement_date)
+) engine=InnoDB default charset=utf8mb4;
+
+create table if not exists erp_business_partners (
+  id bigint primary key auto_increment,
+  partner_code varchar(80) not null,
+  partner_type varchar(40) not null,
+  partner_name varchar(180) not null,
+  address varchar(300),
+  contact_name varchar(120),
+  payment_terms varchar(80),
+  tax_area varchar(80),
+  currency_code varchar(3) not null default 'JPY',
+  credit_limit decimal(18,2),
+  active tinyint(1) not null default 1,
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp,
+  unique key uk_erp_business_partners_code (partner_type, partner_code)
+) engine=InnoDB default charset=utf8mb4;
+
+create table if not exists erp_warehouse_masters (
+  id bigint primary key auto_increment,
+  warehouse_code varchar(80) not null unique,
+  warehouse_name varchar(180) not null,
+  plant_code varchar(40) not null,
+  zone_code varchar(80),
+  bin_code varchar(80),
+  inbound_policy varchar(120),
+  outbound_policy varchar(120),
+  lot_control tinyint(1) not null default 1,
+  active tinyint(1) not null default 1,
+  created_at timestamp not null default current_timestamp,
+  updated_at timestamp not null default current_timestamp on update current_timestamp
 ) engine=InnoDB default charset=utf8mb4;
 
 create table if not exists erp_licenses (
@@ -347,6 +416,17 @@ insert into erp_business_statuses (code, name, status_group, sort_order, active)
 ('status.shortage', 'Shortage', 'RISK', 10, 1),
 ('status.blocked', 'Blocked', 'RISK', 20, 1)
 on duplicate key update name = values(name), status_group = values(status_group), sort_order = values(sort_order), active = values(active);
+
+insert into erp_business_status_transitions (from_status, to_status, action_code, sort_order, active) values
+('status.draft', 'status.open', 'OPEN', 10, 1),
+('status.open', 'status.waitingApproval', 'REQUEST_APPROVAL', 20, 1),
+('status.waitingApproval', 'status.open', 'REJECT', 30, 1),
+('status.open', 'status.released', 'RELEASE', 40, 1),
+('status.released', 'status.posted', 'POST', 50, 1),
+('status.posted', 'status.closed', 'CLOSE', 60, 1),
+('status.open', 'status.cancelled', 'CANCEL', 70, 1),
+('status.released', 'status.cancelled', 'CANCEL', 80, 1)
+on duplicate key update sort_order = values(sort_order), active = values(active);
 
 insert into erp_modules (code, title_key, subtitle_key, page_type, table_title_key, process_title_key, focus_title_key, prompt_value, sort_order, active) values
 ('DASHBOARD', 'module.dashboard', 'dashboard.subtitle', 'DASHBOARD', 'table.sample', 'dashboard.process.title', 'dashboard.alerts.title', null, 10, 1),
@@ -464,10 +544,27 @@ insert into erp_item_masters (item_code, item_name, item_type, uom, plant, statu
 on duplicate key update item_name = values(item_name), item_type = values(item_type), uom = values(uom),
 plant = values(plant), status = values(status), safety_stock = values(safety_stock), lead_time_days = values(lead_time_days);
 
-insert into erp_bom_components (bom_code, parent_item_code, component_item_code, quantity_per, scrap_rate, effective_from, effective_to) values
-('BOM-FG-3007', 'FG-3007', 'RM-1008', '1', '0.0', '2026-01-01', null),
-('BOM-FG-3007', 'FG-3007', 'PK-2210', '1', '0.0', '2026-01-01', null)
+insert into erp_business_partners (partner_code, partner_type, partner_name, address, contact_name, payment_terms, tax_area, currency_code, credit_limit) values
+('CUS-3001', 'CUSTOMER', 'Northwind Manufacturing', 'Tokyo, Japan', 'A. Tanaka', 'NET30', 'JP-TAX', 'JPY', 500000),
+('CUS-3002', 'CUSTOMER', 'Taiyo Robotics', 'Osaka, Japan', 'M. Sato', 'NET45', 'JP-TAX', 'JPY', 800000),
+('SUP-2007', 'SUPPLIER', 'Sakura Metals', 'Osaka, Japan', 'K. Yamada', 'NET45', 'JP-TAX', 'JPY', 300000),
+('SUP-2011', 'SUPPLIER', 'Kanto Package', 'Saitama, Japan', 'N. Suzuki', 'NET30', 'JP-TAX', 'JPY', 200000)
+on duplicate key update partner_name = values(partner_name), address = values(address), contact_name = values(contact_name),
+payment_terms = values(payment_terms), tax_area = values(tax_area), currency_code = values(currency_code), credit_limit = values(credit_limit), active = 1;
+
+insert into erp_warehouse_masters (warehouse_code, warehouse_name, plant_code, zone_code, bin_code, inbound_policy, outbound_policy, lot_control) values
+('WH-A', 'Raw material warehouse', 'JP01', 'RM-ZONE', 'A-01', 'Receipt inspection before put-away', 'FIFO picking', 1),
+('WH-B', 'Packaging warehouse', 'JP01', 'PK-ZONE', 'B-01', 'Direct put-away', 'FIFO picking', 1),
+('FG-01', 'Finished goods warehouse', 'JP01', 'FG-ZONE', 'F-01', 'Completion receipt', 'FEFO shipment', 1)
+on duplicate key update warehouse_name = values(warehouse_name), plant_code = values(plant_code), zone_code = values(zone_code),
+bin_code = values(bin_code), inbound_policy = values(inbound_policy), outbound_policy = values(outbound_policy), lot_control = values(lot_control), active = 1;
+
+insert into erp_bom_components (bom_code, parent_item_code, component_item_code, bom_version, alternate_item_code, operation_code, quantity_per, scrap_rate, operation_scrap_rate, process_consumption, effective_from, effective_to) values
+('BOM-FG-3007', 'FG-3007', 'RM-1008', '1', null, 'OP10', '1', '0.0', '0.02', '1.02', '2026-01-01', null),
+('BOM-FG-3007', 'FG-3007', 'PK-2210', '1', 'PK-2211', 'OP20', '1', '0.0', '0.01', '1.01', '2026-01-01', null)
 on duplicate key update quantity_per = values(quantity_per), scrap_rate = values(scrap_rate),
+bom_version = values(bom_version), alternate_item_code = values(alternate_item_code), operation_code = values(operation_code),
+operation_scrap_rate = values(operation_scrap_rate), process_consumption = values(process_consumption),
 effective_from = values(effective_from), effective_to = values(effective_to), active = 1;
 
 insert ignore into erp_role_menus (role_id, menu_id, can_view, can_create, can_update, can_approve)

@@ -17,6 +17,7 @@ public final class BusinessFunctionCatalog {
         addManufacturingPages();
         addFinancePages();
         addReportPages();
+        addAiPages();
         addAdminPages();
     }
 
@@ -33,7 +34,19 @@ public final class BusinessFunctionCatalog {
 
     private static void add(String code, String[] fields, String[] values, String[] columns, String[][] rows,
                             String flow, String upstream, String downstream) {
-        DEFINITIONS.put(code, new BusinessFunctionDefinition(fields, values, columns, rows, flow, upstream, downstream));
+        DEFINITIONS.put(code, new BusinessFunctionDefinition(fields, values, columns, rows, flow, upstream, downstream,
+                numberingRule(code), "LINOVA / JP01 / FY2026-08", isReadOnlyPage(code)));
+    }
+
+    private static boolean isReadOnlyPage(String code) {
+        return code != null && (code.endsWith("_QUERY")
+                || code.startsWith("REPORT_")
+                || code.startsWith("AI_")
+                || "INVENTORY_LEDGER".equals(code));
+    }
+
+    private static String numberingRule(String code) {
+        return codePrefix(code) + "-{yyMM}-{sequence}";
     }
 
     private static String[] transactionFields() {
@@ -73,34 +86,34 @@ public final class BusinessFunctionCatalog {
 
     private static void addMasterPages() {
         add("MASTER_BOM",
-                new String[]{"column.id", "column.item", "column.status", "column.qty", "column.uom", "column.owner", "function.field.memo"},
-                new String[]{"BOM-FG-3007", "FG-3007", "status.released", "1", "EA", "owner.planner", "Smart actuator assembly"},
-                new String[]{"function.table.line", "column.item", "column.qty", "column.uom", "column.status"},
-                new String[][]{{"10", "RM-1008", "2", "EA", "status.released"}, {"20", "PK-2210", "1", "EA", "status.released"}},
-                "Finished good -> BOM -> Raw material -> Production issue",
+                new String[]{"column.id", "column.item", "column.version", "column.effectiveFrom", "column.alternateItem", "column.scrapRate", "column.operation", "function.field.memo"},
+                new String[]{"BOM-FG-3007", "FG-3007", "1", "2026/01/01", "PK-2211", "2%", "OP10", "Smart actuator assembly"},
+                new String[]{"function.table.line", "column.item", "column.qty", "column.scrapRate", "column.operation", "column.status"},
+                new String[][]{{"10", "RM-1008", "1.02", "2%", "OP10", "status.released"}, {"20", "PK-2210", "1.01", "1%", "OP20", "status.released"}},
+                "Finished good -> BOM version/effective date -> operation consumption -> material issue",
                 "Item master",
                 "MRP and production material issue");
         add("MASTER_CUSTOMER",
-                new String[]{"column.id", "column.name", "function.field.partner", "column.status", "column.owner", "function.field.memo"},
-                new String[]{"CUS-3001", "Northwind Manufacturing", "NET30 / Tokyo", "status.open", "owner.sales", "Settlement: monthly close"},
-                new String[]{"column.id", "column.name", "column.status", "column.next"},
-                new String[][]{{"CUS-3001", "Northwind Manufacturing", "status.open", "term.salesOrder"}, {"CUS-3002", "Taiyo Robotics", "status.released", "term.receivable"}},
+                new String[]{"column.id", "column.name", "column.address", "column.contact", "column.paymentTerms", "column.taxArea", "column.currency", "column.creditLimit"},
+                new String[]{"CUS-3001", "Northwind Manufacturing", "Tokyo, Japan", "A. Tanaka", "NET30", "JP-TAX", "JPY", "500000"},
+                new String[]{"column.id", "column.name", "column.paymentTerms", "column.currency", "column.creditLimit", "column.status"},
+                new String[][]{{"CUS-3001", "Northwind Manufacturing", "NET30", "JPY", "500000", "status.open"}, {"CUS-3002", "Taiyo Robotics", "NET45", "JPY", "800000", "status.released"}},
                 "Customer -> Sales order -> Shipment -> AR",
                 "Trading partner master",
                 "Sales order and accounts receivable");
         add("MASTER_SUPPLIER",
-                new String[]{"column.id", "column.name", "function.field.partner", "column.status", "column.owner", "function.field.memo"},
-                new String[]{"SUP-2007", "Sakura Metals", "NET45 / Osaka", "status.open", "owner.procurement", "Preferred supplier for motors"},
-                new String[]{"column.id", "column.name", "column.status", "column.next"},
-                new String[][]{{"SUP-2007", "Sakura Metals", "status.open", "term.purchaseOrder"}, {"SUP-2011", "Kanto Package", "status.released", "term.payable"}},
+                new String[]{"column.id", "column.name", "column.address", "column.contact", "column.paymentTerms", "column.taxArea", "column.currency", "column.creditLimit"},
+                new String[]{"SUP-2007", "Sakura Metals", "Osaka, Japan", "K. Yamada", "NET45", "JP-TAX", "JPY", "300000"},
+                new String[]{"column.id", "column.name", "column.paymentTerms", "column.currency", "column.creditLimit", "column.status"},
+                new String[][]{{"SUP-2007", "Sakura Metals", "NET45", "JPY", "300000", "status.open"}, {"SUP-2011", "Kanto Package", "NET30", "JPY", "200000", "status.released"}},
                 "Supplier -> Purchase order -> Receipt -> AP",
                 "Trading partner master",
                 "Purchase order and accounts payable");
         add("MASTER_WAREHOUSE",
-                new String[]{"column.id", "column.warehouse", "column.plant", "column.status", "column.owner", "function.field.memo"},
-                new String[]{"WH-A", "Raw material warehouse", "JP01", "status.open", "owner.production", "Bins A-01 to A-20"},
-                new String[]{"column.warehouse", "column.item", "column.qty", "column.status"},
-                new String[][]{{"WH-A", "RM-1008", "420", "status.shortage"}, {"FG-01", "FG-3007", "96", "status.ready"}},
+                new String[]{"column.id", "column.warehouse", "column.plant", "column.zone", "column.bin", "column.inboundPolicy", "column.outboundPolicy", "column.lotControl"},
+                new String[]{"WH-A", "Raw material warehouse", "JP01", "RM-ZONE", "A-01", "Inspection before put-away", "FIFO", "Yes"},
+                new String[]{"column.warehouse", "column.plant", "column.zone", "column.bin", "column.lotControl", "column.status"},
+                new String[][]{{"WH-A", "JP01", "RM-ZONE", "A-01", "Yes", "status.open"}, {"FG-01", "JP01", "FG-ZONE", "F-01", "Yes", "status.ready"}},
                 "Warehouse -> Stock -> Receipt / Shipment / Issue / Count",
                 "Plant and location master",
                 "Inventory ledger and current stock");
@@ -149,6 +162,14 @@ public final class BusinessFunctionCatalog {
                 "Original sales record -> Sales return -> Inventory / AR adjustment",
                 "Sales confirmation",
                 "Inventory increase and receivable adjustment");
+        add("SALES_APPROVAL_REVIEW",
+                new String[]{"column.id", "column.customer", "column.amount", "column.status", "column.owner", "column.approvalHistory", "column.rejectReason", "column.next"},
+                new String[]{"APR-SO-104", "Taiyo Robotics", "124600", "status.waitingApproval", "owner.sales", "Submitted -> Manager review", "", "Release or reject"},
+                new String[]{"column.id", "column.customer", "column.amount", "column.status", "column.owner", "column.rejectReason"},
+                new String[][]{{"APR-SO-104", "Taiyo Robotics", "$124,600", "status.waitingApproval", "owner.sales", ""}, {"APR-QT-022", "Northwind Manufacturing", "$86,000", "status.open", "owner.sales", "Price condition missing"}},
+                "Approval queue -> Review -> Release or reject with reason -> Audit trail",
+                "Quotation and sales order workflow",
+                "Released sales document or rejected work item");
     }
 
     private static void addProcurementPages() {
@@ -228,6 +249,14 @@ public final class BusinessFunctionCatalog {
     }
 
     private static void addManufacturingPages() {
+        add("MANUFACTURING_MRP",
+                new String[]{"column.id", "column.item", "column.demand", "column.stock", "column.ordered", "column.wip", "column.netDemand", "column.next"},
+                new String[]{"MRP-2608-W34", "FG-3007", "120", "96", "40", "40", "0", "No new order"},
+                new String[]{"column.item", "column.demand", "column.stock", "column.ordered", "column.wip", "column.netDemand", "column.next"},
+                new String[][]{{"FG-3007", "120", "96", "40", "40", "0", "status.ready"}, {"RM-1008", "240", "420", "3000", "0", "0", "term.purchaseOrder"}, {"PK-2210", "120", "80", "0", "0", "40", "term.purchaseRequest"}},
+                "Demand + stock + ordered quantity + WIP -> net demand -> planned order / purchase request",
+                "Sales order, forecast, inventory stock, open purchase order, and production WIP",
+                "Purchase request and production order planning");
         add("MANUFACTURING_ORDER", transactionFields(),
                 new String[]{"MO-2608-004", "2026/08/31", "status.open", "LINOVA", "FG-3007", "120", "JP01", "owner.planner", "Plan 2026/09/01-2026/09/05"},
                 transactionColumns(),
@@ -263,6 +292,14 @@ public final class BusinessFunctionCatalog {
                 "Material issue -> Material return -> Raw material stock increase",
                 "Material issue record",
                 "Raw material inventory increase");
+        add("MANUFACTURING_COST",
+                new String[]{"column.id", "column.item", "column.materialCost", "column.laborCost", "column.overheadCost", "column.standardCost", "column.actualCost", "column.variance"},
+                new String[]{"COST-FG-3007", "FG-3007", "18400", "6200", "4100", "28000", "28700", "+700"},
+                new String[]{"column.item", "column.materialCost", "column.laborCost", "column.overheadCost", "column.actualCost", "column.variance"},
+                new String[][]{{"FG-3007", "18400", "6200", "4100", "28700", "+700"}, {"FG-3041", "12600", "5200", "3600", "21400", "-300"}},
+                "Material issue + labor time + overhead rate -> actual cost -> variance analysis",
+                "BOM, routing, material issue, completion, and shop-floor confirmation",
+                "Inventory valuation, production variance, and GL posting");
     }
 
     private static void addFinancePages() {
@@ -346,6 +383,33 @@ public final class BusinessFunctionCatalog {
                 "Purchase confirmation + Payment -> AP balance",
                 "Payables and payments",
                 "Cash planning and GL");
+    }
+
+    private static void addAiPages() {
+        add("AI_QUERY",
+                new String[]{"column.id", "column.dataSource", "column.prompt", "column.permission", "column.audit", "column.status"},
+                new String[]{"AIQ-2608-001", "Inventory + MRP + Purchase", "Which materials can block next week production?", "Role-filtered read only", "Prompt and source logged", "status.ready"},
+                new String[]{"column.id", "column.dataSource", "column.prompt", "column.permission", "column.audit", "column.status"},
+                new String[][]{{"AIQ-2608-001", "Inventory + MRP", "Shortage risk", "Role-filtered", "Logged", "status.ready"}},
+                "Natural-language query -> permitted ERP data source -> read-only answer",
+                "Role permissions, report data, inventory, purchase, and manufacturing documents",
+                "Audit trail and explainable business follow-up");
+        add("AI_EXPLAIN",
+                new String[]{"column.id", "column.dataSource", "column.prompt", "column.permission", "column.audit", "column.status"},
+                new String[]{"AIX-2608-001", "Exception worklist", "Why is MO-2608-004 blocked?", "Role-filtered read only", "Prompt and source logged", "status.ready"},
+                new String[]{"column.id", "column.dataSource", "column.prompt", "column.permission", "column.audit", "column.status"},
+                new String[][]{{"AIX-2608-001", "MRP + PO + stock ledger", "Blocked production order", "Role-filtered", "Logged", "status.ready"}},
+                "Exception -> source documents -> explanation with traceable facts",
+                "Production order, purchase order, inventory ledger, and approval history",
+                "Planner action recommendation and audit log");
+        add("AI_SUMMARY",
+                new String[]{"column.id", "column.dataSource", "column.prompt", "column.permission", "column.audit", "column.status"},
+                new String[]{"AIS-2608-001", "Reports", "Summarize sales and inventory risk", "Role-filtered read only", "Prompt and source logged", "status.ready"},
+                new String[]{"column.id", "column.dataSource", "column.prompt", "column.permission", "column.audit", "column.status"},
+                new String[][]{{"AIS-2608-001", "Sales + Inventory reports", "Monthly summary", "Role-filtered", "Logged", "status.ready"}},
+                "Report data -> summary prompt -> read-only management note",
+                "Sales, procurement, inventory, AR, and AP reports",
+                "Management review and report export");
     }
 
     private static void addAdminPages() {
