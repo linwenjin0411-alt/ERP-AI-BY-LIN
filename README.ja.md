@@ -3,7 +3,7 @@
 
 # Linova One ERP
 
-言語：[日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [English](README.md)
+言語：[English](README.md) | **日本語** | [简体中文](README.zh-CN.md)
 
 `Linova One ERP` は、製造業向けの Java PC デスクトップ ERP プロトタイプです。
 
@@ -13,7 +13,7 @@
 
 - Java Swing デスクトップアプリケーション
 - 既定言語：英語
-- UI 言語：英語、簡体字中国語、日本語
+- UI 言語：英語、日本語、簡体字中国語
 - 言語切替付きログイン画面
 - ワークスペースを開く前の License 検証。オンライン API 検証とオフライン署名 License のフォールバックに対応
 - ログイン後の ERP Cockpit
@@ -45,7 +45,7 @@ JDK 8 以上と Apache Maven 3.8 以上をインストールしてください�
 - FlatLaf
 - MySQL Connector/J
 
-`target/` と `build/` 配下の生成ファイルは Git 管理対象外であり、いつでも再生成できます。
+`target/` と `build/` 配下の生成ファイルはビルド出力であり、いつでも再生成できます。
 
 サイレントデスクトップ起動：
 
@@ -108,13 +108,13 @@ logs/YYYYMMDD/
 - `logs/YYYYMMDD/app-YYYYMMDD-HHMMSS-SSS-PID.log`：アプリケーションイベント、ログインフロー、データベース照会エラー、未捕捉例外
 - `logs/YYYYMMDD/console-YYYYMMDD-HHMMSS-SSS-PID.log`：`javaw` からリダイレクトされた標準出力/標準エラー
 
-ログファイルは Git 管理対象外ですが、`logs` フォルダはプロジェクト内に保持されます。
+ログファイルはローカルに書き込まれ、`logs` フォルダはプロジェクトの実行ディレクトリ構成として保持されます。
 起動ごとに新しい UTF-8 ログファイルが作成されるため、過去の実行ログはトラブルシューティング用に保持され、上書きされません。
 ユーザー操作は英語で `>>> USER_ACTION` プレフィックス付きで記録されます。対象はログイン、ページクリック、ツールバー操作、フォーム保存、ワークフロー確認、エクスポートです。
 
 ## デスクトップ UI
 
-アプリケーションは Swing と FlatLaf を使用します。依存関係は Maven が `pom.xml` から解決し、jar ファイルはコミットしません。
+アプリケーションは Swing と FlatLaf を使用します。依存関係は Maven が `pom.xml` から解決し、アプリケーション jar はビルド時に生成されます。
 
 ログイン成功や操作完了などの通常メッセージは小さな toast ウィンドウで表示され、3 秒後に閉じます。エラーメッセージはブロッキングのアラートダイアログで表示され、ユーザーが確認するまで閉じません。
 
@@ -163,7 +163,7 @@ Example structure only: LINOVA-20271231-<signature>
 
 期限切れ、不正形式、未署名の key は拒否され、ログイン画面は開いたままになります。
 
-`config/license.properties` はローカル License 設定ファイルです。API endpoint を保持でき、demo/offline モードではローカルにキャッシュされた License key も保持できます。このローカル License ファイルは Git 管理対象外であり、コミットしてはいけません。
+`config/license.properties` はローカル License 設定ファイルです。API endpoint を保持でき、demo/offline モードではローカルにキャッシュされた License key も保持できます。このファイルは環境ごとに管理する実行時設定として扱います。
 
 管理者は License ページを開き、現在の License 状態の確認と新しい License の登録を行えます。
 
@@ -181,7 +181,7 @@ Administration -> Security -> Roles -> License Management
 config/db.properties
 ```
 
-このファイルには機密情報が含まれるため、Git 管理対象外です。コミット済みテンプレートは次のファイルです。
+このファイルは環境ごとの接続値を保存します。設定テンプレートは次のファイルです。
 
 ```text
 config/db.properties.example
@@ -196,7 +196,7 @@ database: linova_erp
 username: YOUR_DB_USER
 ```
 
-`config/db.properties.example` を `config/db.properties` にコピーし、実際のローカル接続値を入力してください。`config/db.properties`、`config/license.properties`、データベース dump、エクスポート CSV、実行ログはコミットしないでください。
+`config/db.properties.example` を `config/db.properties` にコピーし、実際のローカル接続値を入力してください。
 
 本番 MySQL 接続では `db.allowPublicKeyRetrieval=false` を維持してください。データベース認証方式が必要とする場合のみ、管理されたローカル互換性テストで一時的に有効化してください。
 
@@ -256,7 +256,7 @@ Role: System Administrator
 pom.xml
 ```
 
-jar ファイル、`build/` のビルド出力、`target/` の Maven 出力は Git 管理対象外です。クローン後、ビルドマシンに JDK と Maven をインストールし、`run.bat --compile-only` を実行し、`config/db.properties.example` を `config/db.properties` にコピーして実データベース値を設定した後、`run.bat --init-db` または `LinovaOneERP.exe` のダブルクリックで起動します。
+アプリケーション jar、`build/` のビルド出力、`target/` の Maven 出力はローカルで生成されます。クローン後、ビルドマシンに JDK と Maven をインストールし、`run.bat --compile-only` を実行し、`config/db.properties.example` を `config/db.properties` にコピーして実データベース値を設定した後、`run.bat --init-db` または `LinovaOneERP.exe` のダブルクリックで起動します。
 
 ## モジュール
 
@@ -276,7 +276,7 @@ jar ファイル、`build/` のビルド出力、`target/` の Maven 出力は G
 - 左ナビゲーションはカスタム Swing ボタンスタイルを使用し、濃色 ERP メニューが Windows ネイティブボタンテーマに上書きされないようにしています。
 - ユーザー認証はまず MySQL を照会します。
 - データベースログイン成功後、`last_login_at` が更新されます。
-- `config/db.properties`、`config/license.properties`、実行ログ、エクスポート、データベース dump、ローカル SQL データファイル、jar ファイルは意図的にコミットされません。
+- 環境ごとの設定、実行ログ、エクスポート、データベース dump、ローカル SQL データファイル、生成 jar はローカル実行時の成果物です。
 - メインワークスペースは、現代的な ERP / AI 時代の印象に合わせて、柔らかいライトナビゲーションとカードスタイルを使用します。
 - `LinovaOneERP.exe` は `run.bat` を非表示で起動するため、日常のデスクトップ利用ではコマンドウィンドウが表示されません。
 - `run.bat` は通常、既存の jar を起動します。Maven ビルドは `run.bat --compile-only` でのみ実行されます。
