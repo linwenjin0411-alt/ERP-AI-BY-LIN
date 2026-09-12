@@ -16,6 +16,9 @@ if /i "%~1"=="--compile-only" (
   exit /b 0
 )
 
+call :ensure_local_config
+if errorlevel 1 exit /b 1
+
 call :ensure_app_jar
 if errorlevel 1 exit /b 1
 
@@ -61,9 +64,32 @@ exit /b 0
 
 :ensure_app_jar
 if exist "%APP_JAR%" exit /b 0
-echo [ERROR] Application jar was not found: %APP_JAR%
-echo Run run.bat --compile-only on a build machine before starting the ERP client.
-exit /b 1
+echo Application jar was not found. Building it now...
+call :build_app
+if errorlevel 1 exit /b 1
+exit /b 0
+
+:ensure_local_config
+if not exist "config" mkdir "config"
+if not exist "config\db.properties" (
+  if exist "config\db.properties.example" (
+    copy /y "config\db.properties.example" "config\db.properties" >nul
+    echo Created config\db.properties from template.
+  ) else (
+    echo [ERROR] Missing config\db.properties.example.
+    exit /b 1
+  )
+)
+if not exist "config\license.properties" (
+  if exist "config\license.properties.example" (
+    copy /y "config\license.properties.example" "config\license.properties" >nul
+    echo Created config\license.properties from template.
+  ) else (
+    echo [ERROR] Missing config\license.properties.example.
+    exit /b 1
+  )
+)
+exit /b 0
 
 :build_app
 where mvn >nul 2>nul
