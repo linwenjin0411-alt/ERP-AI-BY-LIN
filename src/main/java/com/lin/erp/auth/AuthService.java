@@ -45,8 +45,8 @@ public class AuthService {
             return authenticateWithDatabase(normalizedUsername, password, actualLanguage);
         }
 
-        if (dbConfig.isEnabled() && !dbConfig.isFallbackToDemo()) {
-            AppLogger.warning("Database login unavailable and demo fallback disabled.");
+        if (dbConfig.isEnabled()) {
+            AppLogger.warning("Database login unavailable in database mode.");
             throw new AuthException(I18n.t(actualLanguage, "auth.database.unavailable"));
         }
 
@@ -82,10 +82,7 @@ public class AuthService {
         } catch (SQLException e) {
             databaseReady = false;
             AppLogger.error("Database authentication failed.", e);
-            if (!dbConfig.isFallbackToDemo()) {
-                throw new AuthException(I18n.t(language, "auth.database.failed"));
-            }
-            return authenticateWithDemo(normalizedUsername, password, language);
+            throw new AuthException(I18n.t(language, "auth.database.failed"));
         }
     }
 

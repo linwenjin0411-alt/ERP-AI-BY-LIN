@@ -72,6 +72,7 @@ public class MainFrame extends JFrame {
     private final DbMenuRepository menuRepository;
     private final DbItemMasterRepository itemMasterRepository;
     private final DbRoleMenuPermissionRepository permissionRepository;
+    private final DbConfig dbConfig;
     private final Map<String, List<MenuNode>> childMenusByModule = new LinkedHashMap<String, List<MenuNode>>();
     private final Map<String, RoleMenuPermission> modulePermissions = new LinkedHashMap<String, RoleMenuPermission>();
 
@@ -83,6 +84,7 @@ public class MainFrame extends JFrame {
     private JPanel secondaryMenuPanel;
     private JPanel secondaryMenuListPanel;
     private JLabel secondaryMenuTitleLabel;
+    private JLabel brandModeLabel;
     private JLabel brandTaglineLabel;
     private JLabel screenTitleLabel;
     private JLabel screenSubtitleLabel;
@@ -96,21 +98,23 @@ public class MainFrame extends JFrame {
 
     public MainFrame(UserSession session) {
         this.session = session;
-        this.modules = loadModulesForStartup();
-        this.moduleRepository = new DbModuleRepository(DbConfig.loadDefault());
-        this.menuRepository = new DbMenuRepository(DbConfig.loadDefault());
-        this.itemMasterRepository = new DbItemMasterRepository(DbConfig.loadDefault());
-        this.permissionRepository = new DbRoleMenuPermissionRepository(DbConfig.loadDefault());
+        this.dbConfig = DbConfig.loadDefault();
+        this.modules = loadModulesForStartup(dbConfig);
+        this.moduleRepository = new DbModuleRepository(dbConfig);
+        this.menuRepository = new DbMenuRepository(dbConfig);
+        this.itemMasterRepository = new DbItemMasterRepository(dbConfig);
+        this.permissionRepository = new DbRoleMenuPermissionRepository(dbConfig);
         initializeFrame();
     }
 
     public MainFrame(UserSession session, List<ModulePageData> modules) {
         this.session = session;
-        this.modules = modules == null ? loadModulesForStartup() : modules;
-        this.moduleRepository = new DbModuleRepository(DbConfig.loadDefault());
-        this.menuRepository = new DbMenuRepository(DbConfig.loadDefault());
-        this.itemMasterRepository = new DbItemMasterRepository(DbConfig.loadDefault());
-        this.permissionRepository = new DbRoleMenuPermissionRepository(DbConfig.loadDefault());
+        this.dbConfig = DbConfig.loadDefault();
+        this.modules = normalizeStartupModules(modules, dbConfig);
+        this.moduleRepository = new DbModuleRepository(dbConfig);
+        this.menuRepository = new DbMenuRepository(dbConfig);
+        this.itemMasterRepository = new DbItemMasterRepository(dbConfig);
+        this.permissionRepository = new DbRoleMenuPermissionRepository(dbConfig);
         initializeFrame();
     }
 
@@ -134,10 +138,40 @@ public class MainFrame extends JFrame {
     }
 
     public static List<ModulePageData> loadModulesForStartup() {
+        return loadModulesForStartup(DbConfig.loadDefault());
+    }
+
+    private static List<ModulePageData> normalizeStartupModules(List<ModulePageData> loadedModules, DbConfig config) {
+        if (config.isEnabled()) {
+            if (loadedModules == null || loadedModules.isEmpty()) {
+                return loadModulesForStartup(config);
+            }
+            return new ArrayList<ModulePageData>(loadedModules);
+        }
+        if (containsUsableModules(loadedModules)) {
+            return new ArrayList<ModulePageData>(loadedModules);
+        }
+        AppLogger.info("Demo mode received no usable module data. Loading full demo menu.");
+        return loadModulesForStartup(config);
+    }
+
+    private static boolean containsUsableModules(List<ModulePageData> loadedModules) {
+        if (loadedModules == null || loadedModules.isEmpty()) {
+            return false;
+        }
+        for (ModulePageData module : loadedModules) {
+            if (module != null && !"ERROR".equals(module.getPageType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<ModulePageData> loadModulesForStartup(DbConfig config) {
         try {
-            DbConfig config = DbConfig.loadDefault();
             List<ModulePageData> modules = new DbModuleRepository(config).loadModules();
-            AppLogger.info("Loaded ERP module data from database. Module count: " + modules.size());
+            AppLogger.info("Loaded ERP module data from " + (config.isEnabled() ? "database" : "demo store")
+                    + ". Module count: " + modules.size());
             return modules;
         } catch (SQLException e) {
             AppLogger.error("Failed to load ERP module data.", e);
@@ -149,6 +183,10 @@ public class MainFrame extends JFrame {
 
     private void loadSecondaryMenus() {
         childMenusByModule.clear();
+        if (!dbConfig.isEnabled()) {
+            mergeFallbackSecondaryMenus();
+            return;
+        }
         boolean loadedFromDatabase = false;
         try {
             childMenusByModule.putAll(menuRepository.loadChildrenByModule(session.getRoleCode()));
@@ -156,15 +194,24 @@ public class MainFrame extends JFrame {
             AppLogger.info("Loaded ERP secondary menus from database. Role: " + session.getRoleCode()
                     + ", root count: " + childMenusByModule.size());
         } catch (SQLException e) {
-            AppLogger.error("Failed to load ERP secondary menus. Fallback menus will be used.", e);
+            AppLogger.error("Failed to load ERP secondary menus. No fallback menus are used in database mode.", e);
         }
-        if (!loadedFromDatabase) {
+        if (!loadedFromDatabase && !dbConfig.isEnabled()) {
             mergeFallbackSecondaryMenus();
         }
     }
 
     private void applyModuleViewPermissions() {
         if (childMenusByModule.isEmpty()) {
+            if (dbConfig.isEnabled()) {
+                Iterator<ModulePageData> iterator = modules.iterator();
+                while (iterator.hasNext()) {
+                    ModulePageData module = iterator.next();
+                    if (!isAlwaysVisibleModule(module)) {
+                        iterator.remove();
+                    }
+                }
+            }
             return;
         }
         Iterator<ModulePageData> iterator = modules.iterator();
@@ -412,10 +459,14 @@ public class MainFrame extends JFrame {
         JLabel name = new JLabel(I18n.APP_NAME);
         name.setForeground(Color.WHITE);
         name.setFont(AppTheme.font(Font.BOLD, 22));
+        brandModeLabel = new JLabel();
+        brandModeLabel.setForeground(new Color(131, 229, 224));
+        brandModeLabel.setFont(AppTheme.font(Font.BOLD, 12));
         brandTaglineLabel = new JLabel();
         brandTaglineLabel.setForeground(new Color(188, 198, 214));
         brandTaglineLabel.setFont(AppTheme.font(Font.PLAIN, 12));
         brand.add(name);
+        brand.add(brandModeLabel);
         brand.add(brandTaglineLabel);
         sidebar.add(brand, BorderLayout.NORTH);
 
@@ -566,6 +617,8 @@ public class MainFrame extends JFrame {
 
     private void refreshTexts() {
         setTitle(I18n.APP_NAME);
+        brandModeLabel.setText(t("app.demoMode"));
+        brandModeLabel.setVisible(!dbConfig.isEnabled());
         brandTaglineLabel.setText(t("app.tagline"));
         companyLabel.setText(text(session.getCompanyNameKey()));
         periodLabel.setText(t("top.period"));
@@ -842,6 +895,11 @@ public class MainFrame extends JFrame {
         logUserAction("FUNCTION_CLICK", "submenu=" + (currentSubMenu == null ? "NONE" : currentSubMenu.getCode())
                 + " | function=" + function.getCode()
                 + " | functionName=" + english(function.getNameKey()));
+        if (!functionPermission(function).allows("action.refresh")) {
+            logUserAction("FUNCTION_OPEN_DENIED", "function=" + function.getCode());
+            AppMessages.error(this, t("message.error.title"), t("message.permission.denied"));
+            return;
+        }
 
         JFrame window = new JFrame(text(function.getNameKey()) + " - " + I18n.APP_NAME);
         window.setIconImages(AppIcon.images());
@@ -1240,7 +1298,8 @@ public class MainFrame extends JFrame {
         } else if ("action.ask".equals(actionKey)) {
             askAiAssistant();
         } else {
-            AppMessages.success(this, t("message.operation.success"));
+            logUserAction("TOOLBAR_ACTION_DENIED", "module=" + moduleCode(currentModule) + " | action=" + actionKey);
+            AppMessages.error(this, t("message.error.title"), t("message.permission.denied"));
         }
     }
 
@@ -1257,11 +1316,29 @@ public class MainFrame extends JFrame {
         return currentModulePermission().allows(actionKey);
     }
 
+    private RoleMenuPermission functionPermission(MenuNode function) {
+        if (function == null) {
+            return RoleMenuPermission.none("NONE");
+        }
+        if (!dbConfig.isEnabled()) {
+            return RoleMenuPermission.full(function.getCode());
+        }
+        try {
+            return permissionRepository.loadForMenu(session.getRoleCode(), function.getCode());
+        } catch (SQLException e) {
+            AppLogger.error("Function permission load failed.", e);
+            return RoleMenuPermission.none(function.getCode());
+        }
+    }
+
     private RoleMenuPermission currentModulePermission() {
         if (currentModule == null) {
             return RoleMenuPermission.viewOnly("NONE");
         }
         String moduleCode = currentModule.getCode();
+        if (!dbConfig.isEnabled()) {
+            return RoleMenuPermission.full(moduleCode);
+        }
         if (isAlwaysVisibleModule(currentModule)) {
             return RoleMenuPermission.viewOnly(moduleCode);
         }
@@ -1275,9 +1352,9 @@ public class MainFrame extends JFrame {
             return permission;
         } catch (SQLException e) {
             AppLogger.error("Module permission load failed.", e);
-            RoleMenuPermission viewOnly = RoleMenuPermission.viewOnly(moduleCode);
-            modulePermissions.put(moduleCode, viewOnly);
-            return viewOnly;
+            RoleMenuPermission none = RoleMenuPermission.none(moduleCode);
+            modulePermissions.put(moduleCode, none);
+            return none;
         }
     }
 
@@ -1308,6 +1385,9 @@ public class MainFrame extends JFrame {
     }
 
     private void openRecordForm(boolean editMode) {
+        if (!ensureToolbarActionAllowed(editMode ? "action.edit" : "action.new")) {
+            return;
+        }
         if (!hasEditableTable()) {
             logUserAction("FORM_OPEN_BLOCKED", "mode=" + (editMode ? "EDIT" : "CREATE") + " | reason=noEditableTable");
             AppMessages.error(this, t("message.error.title"), t("message.select.row"));
@@ -1741,7 +1821,9 @@ public class MainFrame extends JFrame {
                     int row = selectedModelRow();
                     logUserAction("TABLE_ROW_DOUBLE_CLICK", "row=" + row
                             + " | record=" + (row >= 0 ? selectedRecordName(row) : "none"));
-                    openRecordForm(true);
+                    if (ensureToolbarActionAllowed("action.edit")) {
+                        openRecordForm(true);
+                    }
                 }
             }
         });

@@ -21,6 +21,10 @@ public final class I18n {
                 "Manufacturing ERP for integrated operations",
                 "面向制造业的一体化 ERP",
                 "製造業向け統合 ERP");
+        put("app.demoMode",
+                "Demo mode · local sample data",
+                "当前为演示模式 · 本地示例数据",
+                "デモモード · ローカルサンプルデータ");
         put("app.company",
                 "Linova Smart Manufacturing Ltd.",
                 "灵诺智能制造有限公司",
@@ -42,6 +46,9 @@ public final class I18n {
         put("login.signingIn", "Signing in and loading workspace...",
                 "正在登录并加载工作台...",
                 "ログインしてワークスペースを読み込んでいます...");
+        put("workspace.loading", "Loading workspace data...",
+                "正在加载工作台数据...",
+                "ワークスペースデータを読み込んでいます...");
         put("login.interrupted", "Sign-in was interrupted. Please try again.",
                 "登录被中断，请重试。",
                 "ログインが中断されました。もう一度お試しください。");
@@ -92,6 +99,12 @@ public final class I18n {
         put("license.check.failed", "License status could not be checked. See the app log for details.",
                 "无法检查许可证状态，请查看应用日志。",
                 "ライセンス状態を確認できません。アプリログを確認してください。");
+        put("license.checking", "Checking license...",
+                "正在检查许可证...",
+                "ライセンスを確認しています...");
+        put("license.registering", "Registering license...",
+                "正在登记许可证...",
+                "ライセンスを登録しています...");
         put("license.save.failed", "License could not be saved. See the app log for details.",
                 "许可证保存失败，请查看应用日志。",
                 "ライセンスを保存できません。アプリログを確認してください。");
@@ -326,6 +339,9 @@ public final class I18n {
         put("dashboard.alert.3", "Warehouse A has abnormal inventory movement on item RM-1008.", "A 仓库物料 RM-1008 出现异常库存移动。", "倉庫 A で品目 RM-1008 の異常な在庫移動があります。");
 
         put("section.process", "Process", "流程", "プロセス");
+        put("process.create", "Create", "创建", "作成");
+        put("process.review", "Review", "复核", "確認");
+        put("process.complete", "Complete", "完成", "完了");
         put("section.worklist", "Worklist", "待办", "ワークリスト");
         put("section.master", "Master records", "主记录", "マスタレコード");
         put("section.analytics", "Analytics", "分析", "分析");

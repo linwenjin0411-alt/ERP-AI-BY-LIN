@@ -15,7 +15,7 @@ The name keeps `Lin` as the project identity, uses `nova` for a clean innovation
 - Default language: English
 - UI languages: English, Japanese, Simplified Chinese
 - Login page with language switcher
-- License validation before the workspace opens, with online API verification and offline signed-key fallback
+- License validation before the workspace opens. Database mode requires online API verification
 - ERP cockpit after login
 - SAP / mcframe inspired modules and process flow
 - MySQL-backed user, company, role, menu, and role-menu tables
@@ -126,10 +126,7 @@ Business pages use a unified mcframe-style work screen: toolbar actions, searcha
 
 After a user ID and password are accepted, the login flow validates the license before opening the ERP workspace. If no valid license exists, the login window shows a localized English, Simplified Chinese, or Japanese prompt and asks for a license key.
 
-License validation supports two modes:
-
-- Online API verification through `license.verifyApiUrl`
-- Offline signed license verification
+Database mode requires online API verification through `license.verifyApiUrl`. A local demo license is used only when MySQL is disabled.
 
 For normal deployment, configure the online verification API in:
 
@@ -147,15 +144,15 @@ license.timeoutMs=5000
 
 The application automatically appends `product_code=LinovaOneERP`, `user_code`, and, when entered by the user, `license_key`.
 
-When MySQL is enabled, license records are cached in `erp_licenses`. If an active unexpired license exists, the application confirms it with the configured API before allowing login. If no valid license exists or verification fails, the login window asks the user to enter a license key.
+When MySQL is enabled, license records are stored in `erp_licenses`, but they are not used as an offline grant. If a stored key exists, the application confirms that exact key with the configured API before allowing login. If no key exists or verification fails, the login window asks the user to enter a license key and still requires the API to return `ok=true`, a matching product, and a non-expired `expires_at`.
 
-Offline signed licenses use this format:
+The legacy offline signature verifier remains in the codebase for compatibility review, but it is not a database-mode release path. Historical signed licenses used this format:
 
 ```text
 LINOVA-yyyyMMdd-signature
 ```
 
-The date portion is the license expiration date. The signature portion is verified with the application public key, so a plain future date is not enough to create a valid license.
+The date portion is the license expiration date. The signature portion is verified with the application public key, so a plain future date is not enough to create a valid license. Online rejection is not bypassed by this compatibility verifier.
 
 ```text
 Example structure only: LINOVA-20271231-<signature>
@@ -256,7 +253,7 @@ Runtime dependencies are managed by Maven:
 pom.xml
 ```
 
-Application jars, build outputs in `build/`, and Maven outputs in `target/` are generated locally. After cloning, install JDK and Maven, run `run.bat --compile-only` on a build machine, copy `config/db.properties.example` to `config/db.properties`, fill in real database values, then run `run.bat --init-db` or double-click `LinovaOneERP.exe`.
+Application jars, build outputs in `build/`, and Maven outputs in `target/` are generated locally. After cloning, install JDK and Maven, then run `run.bat` for local demo startup. For database deployment, edit the generated `config/db.properties`, fill in real database values, configure `config/license.properties`, then run `run.bat --init-db`.
 
 ## Modules
 

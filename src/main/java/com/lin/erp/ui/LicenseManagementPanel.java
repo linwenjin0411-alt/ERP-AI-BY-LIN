@@ -3,8 +3,10 @@ package com.lin.erp.ui;
 import com.lin.erp.auth.UserSession;
 import com.lin.erp.config.DbConfig;
 import com.lin.erp.db.DbLicenseRepository;
+import com.lin.erp.db.DbRoleMenuPermissionRepository;
 import com.lin.erp.db.LicenseStatus;
 import com.lin.erp.db.MenuNode;
+import com.lin.erp.db.RoleMenuPermission;
 import com.lin.erp.i18n.I18n;
 import com.lin.erp.logging.AppLogger;
 
@@ -32,6 +34,7 @@ class LicenseManagementPanel extends JPanel {
     private final Window owner;
     private final UserSession session;
     private final DbLicenseRepository repository;
+    private final RoleMenuPermission permission;
     private final JTextField licenseField = new JTextField("LINOVA-yyyyMMdd-signature");
     private final JLabel statusLabel = new JLabel();
     private final DefaultTableModel tableModel;
@@ -41,6 +44,7 @@ class LicenseManagementPanel extends JPanel {
         this.owner = owner;
         this.session = session;
         this.repository = new DbLicenseRepository(DbConfig.loadDefault());
+        this.permission = loadPermission(function);
         this.tableModel = new DefaultTableModel(new String[0][0], columns()) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -72,7 +76,12 @@ class LicenseManagementPanel extends JPanel {
         styleField(licenseField);
         input.add(licenseField);
         input.add(button("action.refresh", false));
-        input.add(button("license.action.register", true));
+        JButton registerButton = button("license.action.register", true);
+        registerButton.setEnabled(permission.allows("action.edit"));
+        if (!registerButton.isEnabled()) {
+            registerButton.setToolTipText(t("message.permission.denied"));
+        }
+        input.add(registerButton);
         panel.add(input, BorderLayout.WEST);
 
         statusLabel.setForeground(AppTheme.TEXT_PRIMARY);
@@ -139,38 +148,75 @@ class LicenseManagementPanel extends JPanel {
     }
 
     private void reload() {
-        try {
-            LicenseStatus status = repository.currentStatus();
-            String validUntil = status.getValidUntil() == null ? "" : status.getValidUntil().toString();
-            statusLabel.setText(status.isValid() ? t("license.status.valid") + validUntil : t("license.status.invalid"));
-            tableModel.setDataVector(new String[][]{{
-                    status.getLicenseKey() == null ? "" : status.getLicenseKey(),
-                    validUntil,
-                    status.isValid() ? t("status.released") : t("status.cancelled")
-            }}, columns());
-        } catch (SQLException e) {
-            AppLogger.error("License page refresh failed.", e);
-            AppMessages.error(owner, t("message.error.title"), t("license.check.failed"));
-        }
+        BackgroundTasks.run(
+                owner,
+                "License page refresh failed.",
+                t("message.error.title"),
+                t("license.check.failed"),
+                new BackgroundTasks.Work<LicenseStatus>() {
+                    @Override
+                    public LicenseStatus run() throws Exception {
+                        return repository.currentStatus(session.getUsername());
+                    }
+                },
+                new BackgroundTasks.Success<LicenseStatus>() {
+                    @Override
+                    public void accept(LicenseStatus status) {
+                        String validUntil = status.getValidUntil() == null ? "" : status.getValidUntil().toString();
+                        statusLabel.setText(status.isValid() ? t("license.status.valid") + validUntil : t("license.status.invalid"));
+                        tableModel.setDataVector(new String[][]{{
+                                status.getLicenseKey() == null ? "" : status.getLicenseKey(),
+                                validUntil,
+                                status.isValid() ? t("status.released") : t("status.cancelled")
+                        }}, columns());
+                    }
+                }
+        );
     }
 
     private void register() {
-        try {
-            LicenseStatus status = repository.registerLicense(licenseField.getText());
-            if (!status.isValid()) {
-                AppMessages.error(owner, t("message.error.title"), t("license.invalid"));
-                return;
-            }
-            AppMessages.success(owner, t("license.register.success") + status.getValidUntil());
-            reload();
-        } catch (SQLException e) {
-            AppLogger.error("License page save failed.", e);
-            AppMessages.error(owner, t("message.error.title"), t("license.save.failed"));
+        if (!permission.allows("action.edit")) {
+            AppMessages.error(owner, t("message.error.title"), t("message.permission.denied"));
+            return;
         }
+        final String key = licenseField.getText();
+        BackgroundTasks.run(
+                owner,
+                "License page save failed.",
+                t("message.error.title"),
+                t("license.save.failed"),
+                new BackgroundTasks.Work<LicenseStatus>() {
+                    @Override
+                    public LicenseStatus run() throws Exception {
+                        return repository.registerLicense(key, session.getUsername());
+                    }
+                },
+                new BackgroundTasks.Success<LicenseStatus>() {
+                    @Override
+                    public void accept(LicenseStatus status) {
+                        if (!status.isValid()) {
+                            AppMessages.error(owner, t("message.error.title"), t("license.invalid"));
+                            return;
+                        }
+                        AppMessages.success(owner, t("license.register.success") + status.getValidUntil());
+                        reload();
+                    }
+                }
+        );
     }
 
     private String[] columns() {
         return new String[]{t("license.field.key"), t("license.field.validUntil"), t("column.status")};
+    }
+
+    private RoleMenuPermission loadPermission(MenuNode function) {
+        String code = function == null ? "ADMIN_LICENSE" : function.getCode();
+        try {
+            return new DbRoleMenuPermissionRepository(DbConfig.loadDefault()).loadForMenu(session.getRoleCode(), code);
+        } catch (SQLException e) {
+            AppLogger.error("License management permission load failed.", e);
+            return RoleMenuPermission.none(code);
+        }
     }
 
     private void styleField(JTextField field) {

@@ -27,7 +27,7 @@ public class DatabaseSetup {
 
     private static void ensureInitialAdmin(DbConfig config) throws Exception {
         DbUserRepository users = new DbUserRepository(config);
-        if (users.countUsers() > 0) {
+        if (users.countActiveAdministrators() > 0) {
             return;
         }
 

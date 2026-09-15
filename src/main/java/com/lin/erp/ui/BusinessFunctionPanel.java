@@ -201,7 +201,9 @@ public class BusinessFunctionPanel extends JPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
-                    openForm(true);
+                    if (ensureActionAllowed("action.edit")) {
+                        openForm(true);
+                    }
                 }
             }
         });
@@ -323,11 +325,14 @@ public class BusinessFunctionPanel extends JPanel {
             return new DbRoleMenuPermissionRepository(DbConfig.loadDefault()).loadForMenu(session.getRoleCode(), menuCode);
         } catch (SQLException e) {
             AppLogger.error("Function permission load failed.", e);
-            return RoleMenuPermission.viewOnly(menuCode);
+            return RoleMenuPermission.none(menuCode);
         }
     }
 
     private void openForm(boolean editMode) {
+        if (!ensureActionAllowed(editMode ? "action.edit" : "action.new")) {
+            return;
+        }
         int row = selectedRow();
         FunctionRecord selected = null;
         if (editMode) {

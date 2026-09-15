@@ -5,6 +5,9 @@ import com.lin.erp.auth.UserSession;
 import com.lin.erp.i18n.Language;
 import com.lin.erp.logging.AppLogger;
 import com.lin.erp.ui.MainFrame;
+import com.lin.erp.db.ModulePageData;
+
+import java.util.List;
 
 public class Diagnostics {
     public static void main(String[] args) throws Exception {
@@ -21,7 +24,11 @@ public class Diagnostics {
         long start = System.currentTimeMillis();
         AuthService authService = new AuthService();
         UserSession session = authService.authenticate(username, password.toCharArray(), Language.EN);
-        int moduleCount = MainFrame.loadModulesForStartup().size();
+        List<ModulePageData> modules = MainFrame.loadModulesForStartup();
+        int moduleCount = modules.size();
+        if (moduleCount == 1 && "ERROR".equals(modules.get(0).getCode())) {
+            throw new IllegalStateException("Module loading failed: " + modules.get(0).getSubtitleKey());
+        }
         long elapsed = System.currentTimeMillis() - start;
 
         System.out.println("Login diagnostic succeeded.");

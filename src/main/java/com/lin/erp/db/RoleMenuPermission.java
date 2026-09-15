@@ -44,7 +44,16 @@ public class RoleMenuPermission {
                 || "action.post".equals(actionKey)) {
             return canApprove;
         }
-        return canView;
+        if ("action.refresh".equals(actionKey)) {
+            return canView;
+        }
+        if ("action.export".equals(actionKey)
+                || "action.details".equals(actionKey)
+                || "action.simulate".equals(actionKey)
+                || "action.ask".equals(actionKey)) {
+            return canView;
+        }
+        return false;
     }
 
     public boolean canDelete() {

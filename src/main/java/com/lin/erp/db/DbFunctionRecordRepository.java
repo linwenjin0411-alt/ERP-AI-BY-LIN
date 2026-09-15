@@ -12,9 +12,14 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class DbFunctionRecordRepository {
+    private static final Map<String, List<FunctionRecord>> DEMO_RECORDS = new LinkedHashMap<String, List<FunctionRecord>>();
+    private static long demoRecordSequence = 1L;
+
     private final DbConfig config;
     private final String auditUser;
     private final String auditCompany;
@@ -32,6 +37,12 @@ public class DbFunctionRecordRepository {
     }
 
     public List<FunctionRecord> loadRecords(String functionCode, String[][] seedRows) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_RECORDS) {
+                ensureDemoRecords(functionCode, seedRows);
+                return copyRecords(DEMO_RECORDS.get(functionCode));
+            }
+        }
         BusinessRecordMapping mapping = mappingFor(functionCode);
         if (mapping != null) {
             return loadBusinessRecords(mapping, seedRows);
@@ -60,6 +71,14 @@ public class DbFunctionRecordRepository {
     }
 
     public long createRecord(String functionCode, String[] values) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_RECORDS) {
+                ensureDemoRecords(functionCode, null);
+                long id = demoRecordSequence++;
+                DEMO_RECORDS.get(functionCode).add(new FunctionRecord(id, functionCode, copy(values)));
+                return id;
+            }
+        }
         BusinessRecordMapping mapping = mappingFor(functionCode);
         if (mapping != null) {
             return createBusinessRecord(mapping, values);
@@ -93,6 +112,12 @@ public class DbFunctionRecordRepository {
     }
 
     public void updateRecord(long id, String[] values) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_RECORDS) {
+                replaceDemoRecord(id, values);
+            }
+            return;
+        }
         BusinessRecordMapping mapping = mappingForId(id);
         if (mapping != null) {
             updateBusinessRecord(mapping, id, values);
@@ -117,6 +142,12 @@ public class DbFunctionRecordRepository {
     }
 
     public void deleteRecord(long id) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_RECORDS) {
+                removeDemoRecord(id);
+            }
+            return;
+        }
         BusinessRecordMapping mapping = mappingForId(id);
         if (mapping != null) {
             deleteBusinessRecord(mapping, id);
@@ -622,6 +653,63 @@ public class DbFunctionRecordRepository {
                 statement.close();
             }
         }
+    }
+
+    private static void ensureDemoRecords(String functionCode, String[][] seedRows) {
+        if (DEMO_RECORDS.containsKey(functionCode)) {
+            return;
+        }
+        List<FunctionRecord> records = new ArrayList<FunctionRecord>();
+        if (seedRows != null) {
+            for (String[] seedRow : seedRows) {
+                records.add(new FunctionRecord(demoRecordSequence++, functionCode, copy(seedRow)));
+            }
+        }
+        DEMO_RECORDS.put(functionCode, records);
+    }
+
+    private static List<FunctionRecord> copyRecords(List<FunctionRecord> records) {
+        List<FunctionRecord> copies = new ArrayList<FunctionRecord>();
+        if (records == null) {
+            return copies;
+        }
+        for (FunctionRecord record : records) {
+            copies.add(new FunctionRecord(record.getId(), record.getFunctionCode(), record.getValues()));
+        }
+        return copies;
+    }
+
+    private static void replaceDemoRecord(long id, String[] values) {
+        for (Map.Entry<String, List<FunctionRecord>> entry : DEMO_RECORDS.entrySet()) {
+            List<FunctionRecord> records = entry.getValue();
+            for (int i = 0; i < records.size(); i++) {
+                FunctionRecord record = records.get(i);
+                if (record.getId() == id) {
+                    records.set(i, new FunctionRecord(id, record.getFunctionCode(), copy(values)));
+                    return;
+                }
+            }
+        }
+    }
+
+    private static void removeDemoRecord(long id) {
+        for (List<FunctionRecord> records : DEMO_RECORDS.values()) {
+            for (int i = records.size() - 1; i >= 0; i--) {
+                if (records.get(i).getId() == id) {
+                    records.remove(i);
+                    return;
+                }
+            }
+        }
+    }
+
+    private static String[] copy(String[] values) {
+        if (values == null) {
+            return new String[0];
+        }
+        String[] copy = new String[values.length];
+        System.arraycopy(values, 0, copy, 0, values.length);
+        return copy;
     }
 
     private void seedIfEmpty(Connection connection, String functionCode, String[][] seedRows) throws SQLException {
