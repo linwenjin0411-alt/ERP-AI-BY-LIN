@@ -117,7 +117,7 @@ if exist "%JAVAW_CMD%" (
 
 where javaw >nul 2>nul
 if errorlevel 1 (
-  "%JAVA_CMD%" -jar "%APP_JAR%"
+  start "" "%JAVA_CMD%" -jar "%APP_JAR%"
 ) else (
   start "" javaw -jar "%APP_JAR%"
 )

@@ -120,6 +120,11 @@ public final class BusinessFunctionPageFactory {
         if ("REPORT_AP_BALANCE".equals(code)) {
             return new PayableBalanceReportPanel(owner, session, function);
         }
+        if ("AI_QUERY".equals(code)
+                || "AI_EXPLAIN".equals(code)
+                || "AI_SUMMARY".equals(code)) {
+            return new AiAssistantPanel(owner, session, function);
+        }
         if ("ADMIN_USERS".equals(code)) {
             return new UserManagementPanel(owner, session, function);
         }

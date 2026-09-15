@@ -345,7 +345,7 @@ public class DbModuleRepository {
 
     private static Map<String, ModulePageData> createDemoModules() {
         Map<String, ModulePageData> modules = new LinkedHashMap<String, ModulePageData>();
-        addDemoModule(modules, "DASHBOARD", "app.title", "brand.flow", "DASHBOARD",
+        addDemoModule(modules, "DASHBOARD", "module.dashboard", "brand.flow", "DASHBOARD",
                 new String[]{"action.refresh"},
                 new String[]{"column.id", "column.status", "column.owner"},
                 new String[][]{{"TODAY", "status.ready", "owner.system"}});
