@@ -1,22 +1,24 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Linova One ERP")]
 [assembly: AssemblyProduct("Linova One ERP")]
 [assembly: AssemblyCompany("Linova")]
-[assembly: AssemblyFileVersion("1.0.0.5")]
-[assembly: AssemblyInformationalVersion("1.0.0.5")]
+[assembly: AssemblyFileVersion("1.0.0.6")]
+[assembly: AssemblyInformationalVersion("1.0.0.6")]
 
 internal sealed class StartupForm : Form
 {
     public StartupForm()
     {
-        Text = "Linova One ERP";
+        Text = "Linova One ERP Startup";
         Width = 460;
         Height = 170;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -189,9 +191,85 @@ public static class LinovaOneERPLauncher
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            process.WaitForExit();
+            while (!process.WaitForExit(300))
+            {
+                if (IsLinovaApplicationWindowOpen())
+                {
+                    WriteLogLine(logWriter, "Application window detected. Closing startup window.");
+                    return 0;
+                }
+            }
             WriteLogLine(logWriter, "Exit code: " + process.ExitCode);
             return process.ExitCode;
+        }
+    }
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    private static bool IsLinovaApplicationWindowOpen()
+    {
+        WindowSearchState state = new WindowSearchState(Process.GetCurrentProcess().Id);
+        EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+        {
+            if (!IsWindowVisible(hWnd))
+            {
+                return true;
+            }
+
+            uint windowProcessId;
+            GetWindowThreadProcessId(hWnd, out windowProcessId);
+            if (windowProcessId == state.CurrentProcessId)
+            {
+                return true;
+            }
+
+            string title = GetWindowTitle(hWnd);
+            if ("Sign in - Linova One ERP".Equals(title, StringComparison.Ordinal)
+                    || "Linova One ERP".Equals(title, StringComparison.Ordinal))
+            {
+                state.Found = true;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return state.Found;
+    }
+
+    private static string GetWindowTitle(IntPtr hWnd)
+    {
+        int length = GetWindowTextLength(hWnd);
+        if (length <= 0)
+        {
+            return String.Empty;
+        }
+        StringBuilder builder = new StringBuilder(length + 1);
+        GetWindowText(hWnd, builder, builder.Capacity);
+        return builder.ToString();
+    }
+
+    private sealed class WindowSearchState
+    {
+        public readonly uint CurrentProcessId;
+        public bool Found;
+
+        public WindowSearchState(int currentProcessId)
+        {
+            CurrentProcessId = unchecked((uint) currentProcessId);
         }
     }
 
