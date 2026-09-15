@@ -9,6 +9,7 @@ config/*.local.properties
 lib/*.jar
 logs/
 exports/
+database/
 database/*.dump
 database/*.dump.sql
 database/*.sql.gz
