@@ -9,8 +9,8 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("Linova One ERP")]
 [assembly: AssemblyProduct("Linova One ERP")]
 [assembly: AssemblyCompany("Linova")]
-[assembly: AssemblyFileVersion("1.0.0.4")]
-[assembly: AssemblyInformationalVersion("1.0.0.4")]
+[assembly: AssemblyFileVersion("1.0.0.5")]
+[assembly: AssemblyInformationalVersion("1.0.0.5")]
 
 internal sealed class StartupForm : Form
 {
@@ -37,7 +37,7 @@ internal sealed class StartupForm : Form
         messageLabel.Dock = DockStyle.Fill;
         messageLabel.TextAlign = ContentAlignment.MiddleLeft;
         messageLabel.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        messageLabel.Text = "Starting Linova One ERP...\r\n正在加载应用 JAR，请稍候。\r\nThe first start after clone may build the JAR and take a few minutes.";
+        messageLabel.Text = "Starting Linova One ERP...\r\nアプリケーション JAR を読み込んでいます。しばらくお待ちください。\r\n正在加载应用 JAR，请稍候。\r\nFirst startup after clone may build the JAR and take a few minutes.";
         layout.Controls.Add(messageLabel, 0, 0);
 
         ProgressBar progress = new ProgressBar();
@@ -75,7 +75,7 @@ public static class LinovaOneERPLauncher
             if (!File.Exists(batchPath))
             {
                 MessageBox.Show(
-                    "run.bat was not found beside the launcher.",
+                    "run.bat was not found beside the launcher.\r\nランチャーと同じフォルダーに run.bat が見つかりません。\r\n启动器同目录下未找到 run.bat。",
                     "Linova One ERP",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -130,7 +130,7 @@ public static class LinovaOneERPLauncher
             if (result.Error != null)
             {
                 MessageBox.Show(
-                    "Could not start Linova One ERP.\r\n\r\n" + result.Error.Message,
+                    "Could not start Linova One ERP.\r\nLinova One ERP を起動できませんでした。\r\n无法启动 Linova One ERP。\r\n\r\n" + result.Error.Message,
                     "Linova One ERP",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -139,9 +139,9 @@ public static class LinovaOneERPLauncher
 
             if (result.ExitCode != 0)
             {
-                string logHint = String.IsNullOrEmpty(result.LogPath) ? String.Empty : "\r\n\r\nStartup log:\r\n" + result.LogPath;
+                string logHint = String.IsNullOrEmpty(result.LogPath) ? String.Empty : "\r\n\r\nStartup log / 起動ログ / 启动日志:\r\n" + result.LogPath;
                 MessageBox.Show(
-                    "Linova One ERP startup failed before the app window opened.\r\n\r\nRun run.bat from this folder to see the full error. Make sure JDK and Maven are installed when starting from a fresh clone." + logHint,
+                    "Linova One ERP startup failed before the app window opened.\r\nアプリ画面が開く前に起動に失敗しました。\r\n应用窗口打开前启动失败。\r\n\r\nRun run.bat from this folder to see the full error.\r\n詳細なエラーを確認するには、このフォルダーで run.bat を実行してください。\r\n请在当前文件夹运行 run.bat 查看完整错误。\r\n\r\nMake sure JDK and Maven are installed when starting from a fresh clone.\r\nfresh clone から起動する場合は JDK と Maven がインストールされていることを確認してください。\r\n如果是 fresh clone 后首次启动，请确认已安装 JDK 和 Maven。" + logHint,
                     "Linova One ERP",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -153,7 +153,7 @@ public static class LinovaOneERPLauncher
         catch (Exception ex)
         {
             MessageBox.Show(
-                "Could not start Linova One ERP.\r\n\r\n" + ex.Message,
+                "Could not start Linova One ERP.\r\nLinova One ERP を起動できませんでした。\r\n无法启动 Linova One ERP。\r\n\r\n" + ex.Message,
                 "Linova One ERP",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
