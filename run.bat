@@ -71,9 +71,17 @@ exit /b 0
 
 :ensure_local_config
 if not exist "config" mkdir "config"
+if not exist "config" (
+  echo [ERROR] Failed to create config directory.
+  exit /b 1
+)
 if not exist "config\db.properties" (
   if exist "config\db.properties.example" (
     copy /y "config\db.properties.example" "config\db.properties" >nul
+    if errorlevel 1 (
+      echo [ERROR] Failed to create config\db.properties.
+      exit /b 1
+    )
     echo Created config\db.properties from template.
   ) else (
     echo [ERROR] Missing config\db.properties.example.
@@ -83,6 +91,10 @@ if not exist "config\db.properties" (
 if not exist "config\license.properties" (
   if exist "config\license.properties.example" (
     copy /y "config\license.properties.example" "config\license.properties" >nul
+    if errorlevel 1 (
+      echo [ERROR] Failed to create config\license.properties.
+      exit /b 1
+    )
     echo Created config\license.properties from template.
   ) else (
     echo [ERROR] Missing config\license.properties.example.

@@ -12,11 +12,13 @@ Demo startup:
 2. Double-click `LinovaOneERP.exe`, or run `run.bat`.
 3. On first startup, `run.bat` automatically creates local configuration files from the templates when they are missing.
 4. If `target/linova-one-erp.jar` is missing, `run.bat` automatically builds it with Maven.
-5. Sign in with the demo account.
+5. Sign in with the local-only demo account.
 
 ```text
 admin / admin123
 ```
+
+Do not use the demo account for production. Database mode requires users created in MySQL.
 
 Demo mode is controlled only by `config/db.properties`:
 
@@ -56,7 +58,7 @@ db.username=YOUR_DB_USER
 db.password=YOUR_DB_PASSWORD
 ```
 
-Then initialize the database:
+Then initialize the database and set the first administrator password:
 
 ```bat
 run.bat --init-db
@@ -72,11 +74,13 @@ run.bat --init-db
 2. `LinovaOneERP.exe` をダブルクリックするか、`run.bat` を実行します。
 3. 初回起動時、ローカル設定ファイルが存在しない場合は、`run.bat` がテンプレートから自動作成します。
 4. `target/linova-one-erp.jar` が存在しない場合は、`run.bat` が Maven で自動ビルドします。
-5. デモアカウントでログインします。
+5. ローカル専用のデモアカウントでログインします。
 
 ```text
 admin / admin123
 ```
+
+本番環境ではデモアカウントを使用しないでください。データベースモードでは MySQL に作成されたユーザーが必要です。
 
 デモモードは `config/db.properties` だけで制御します。
 
@@ -116,7 +120,7 @@ db.username=YOUR_DB_USER
 db.password=YOUR_DB_PASSWORD
 ```
 
-その後、データベースを初期化します。
+その後、データベースを初期化し、最初の管理者パスワードを設定します。
 
 ```bat
 run.bat --init-db
@@ -132,11 +136,13 @@ run.bat --init-db
 2. 双击 `LinovaOneERP.exe`，或执行 `run.bat`。
 3. 首次启动时，如果本地配置文件不存在，`run.bat` 会自动从模板创建。
 4. 如果 `target/linova-one-erp.jar` 不存在，`run.bat` 会自动使用 Maven 构建。
-5. 使用演示账号登录。
+5. 使用仅限本地演示的账号登录。
 
 ```text
 admin / admin123
 ```
+
+不要在生产环境使用演示账号。数据库模式必须使用 MySQL 中创建的用户。
 
 演示模式只由 `config/db.properties` 控制：
 
@@ -176,7 +182,7 @@ db.username=YOUR_DB_USER
 db.password=YOUR_DB_PASSWORD
 ```
 
-然后初始化数据库：
+然后初始化数据库，并设置第一个管理员密码：
 
 ```bat
 run.bat --init-db

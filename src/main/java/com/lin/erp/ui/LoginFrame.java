@@ -16,11 +16,11 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
-import javax.swing.JOptionPane;
 import javax.swing.SwingWorker;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
@@ -35,6 +35,7 @@ import java.awt.Font;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -51,6 +52,7 @@ import java.sql.SQLException;
 public class LoginFrame extends JFrame {
     private final AuthService authService;
     private final DbLicenseRepository licenseRepository;
+    private final DbConfig dbConfig;
     private final List<JLabel> capabilityLabels = new ArrayList<JLabel>();
 
     private Language language = I18n.DEFAULT_LANGUAGE;
@@ -75,7 +77,8 @@ public class LoginFrame extends JFrame {
 
     public LoginFrame(AuthService authService) {
         this.authService = authService;
-        this.licenseRepository = new DbLicenseRepository(DbConfig.loadDefault());
+        this.dbConfig = DbConfig.loadDefault();
+        this.licenseRepository = new DbLicenseRepository(dbConfig);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setIconImages(AppIcon.images());
         setMinimumSize(new Dimension(1040, 650));
@@ -203,7 +206,7 @@ public class LoginFrame extends JFrame {
 
         gbc.gridy++;
         gbc.insets = new Insets(0, 0, 0, 0);
-        usernameField = new JTextField("admin");
+        usernameField = new JTextField(dbConfig.isEnabled() ? "" : "admin");
         styleTextField(usernameField);
         panel.add(usernameField, gbc);
 
@@ -214,7 +217,7 @@ public class LoginFrame extends JFrame {
 
         gbc.gridy++;
         gbc.insets = new Insets(0, 0, 0, 0);
-        passwordField = new JPasswordField("admin123");
+        passwordField = new JPasswordField(dbConfig.isEnabled() ? "" : "admin123");
         styleTextField(passwordField);
         panel.add(passwordField, gbc);
 
@@ -372,13 +375,11 @@ public class LoginFrame extends JFrame {
         AppLogger.info("Sign-in requested for user: " + username);
         AppLogger.userAction("LOGIN_SUBMIT", "username=" + username + " | language=" + selectedLanguage.name());
 
-        SwingWorker<LoginResult, Void> worker = new SwingWorker<LoginResult, Void>() {
+        SwingWorker<UserSession, Void> worker = new SwingWorker<UserSession, Void>() {
             @Override
-            protected LoginResult doInBackground() throws Exception {
+            protected UserSession doInBackground() throws Exception {
                 try {
-                    UserSession session = authService.authenticate(username, password, selectedLanguage);
-                    List<ModulePageData> modules = MainFrame.loadModulesForStartup();
-                    return new LoginResult(session, modules);
+                    return authService.authenticate(username, password, selectedLanguage);
                 } finally {
                     Arrays.fill(password, '\0');
                 }
@@ -387,17 +388,10 @@ public class LoginFrame extends JFrame {
             @Override
             protected void done() {
                 try {
-                    LoginResult result = get();
-                    AppLogger.info("Sign-in succeeded for user: " + result.session.getUsername());
-                    AppLogger.userAction("LOGIN_SUCCESS", "username=" + result.session.getUsername());
-                    if (!ensureLicense(result.session)) {
-                        setLoginEnabled(true);
-                        return;
-                    }
-                    MainFrame mainFrame = new MainFrame(result.session, result.modules);
-                    mainFrame.setVisible(true);
-                    AppMessages.success(mainFrame, I18n.t(result.session.getLanguage(), "message.login.success"));
-                    dispose();
+                    UserSession session = get();
+                    AppLogger.info("Account authentication succeeded for user: " + session.getUsername());
+                    AppLogger.userAction("ACCOUNT_AUTH_SUCCESS", "username=" + session.getUsername());
+                    startLicenseCheck(session);
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
                     showLoginFailure(I18n.t(selectedLanguage, "login.interrupted"), ex);
@@ -426,49 +420,168 @@ public class LoginFrame extends JFrame {
         setLoginEnabled(true);
     }
 
-    private boolean ensureLicense(UserSession session) {
-        try {
-            LicenseStatus status = licenseRepository.currentStatus(session.getUsername());
-            if (status.isValid()) {
-                AppLogger.userAction("LICENSE_VALID", "username=" + session.getUsername()
-                        + " | validUntil=" + status.getValidUntil());
-                return true;
+    private void startLicenseCheck(final UserSession session) {
+        messageLabel.setText(I18n.t(language, "license.checking"));
+        messageLabel.setForeground(AppTheme.SUCCESS);
+        SwingWorker<LicenseStatus, Void> worker = new SwingWorker<LicenseStatus, Void>() {
+            @Override
+            protected LicenseStatus doInBackground() throws Exception {
+                return licenseRepository.currentStatus(session.getUsername());
             }
-        } catch (SQLException e) {
-            AppLogger.error("License check failed.", e);
-            AppMessages.error(this, I18n.t(language, "message.error.title"), I18n.t(language, "license.check.failed"));
-            return false;
+
+            @Override
+            protected void done() {
+                try {
+                    LicenseStatus status = get();
+                    if (status.isValid()) {
+                        AppLogger.userAction("LICENSE_VALID", "username=" + session.getUsername()
+                                + " | validUntil=" + status.getValidUntil());
+                        loadWorkspace(session);
+                    } else {
+                        promptAndRegisterLicense(session);
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    showLicenseFailure(I18n.t(language, "login.interrupted"), ex);
+                } catch (ExecutionException ex) {
+                    Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+                    showLicenseFailure(I18n.t(language, "license.check.failed"), cause);
+                }
+            }
+        };
+        worker.execute();
+    }
+
+    private void promptAndRegisterLicense(final UserSession session) {
+        final String key = showLicensePrompt();
+        if (key == null) {
+            AppLogger.userAction("LICENSE_INPUT_CANCEL", "username=" + session.getUsername());
+            messageLabel.setText(I18n.t(language, "license.required"));
+            messageLabel.setForeground(AppTheme.ERROR);
+            setLoginEnabled(true);
+            return;
         }
 
-        while (true) {
-            String key = JOptionPane.showInputDialog(
-                    this,
-                    I18n.t(language, "license.prompt.message"),
-                    I18n.t(language, "license.prompt.title"),
-                    JOptionPane.WARNING_MESSAGE
-            );
-            if (key == null) {
-                AppLogger.userAction("LICENSE_INPUT_CANCEL", "username=" + session.getUsername());
-                messageLabel.setText(I18n.t(language, "license.required"));
-                messageLabel.setForeground(AppTheme.ERROR);
-                return false;
+        messageLabel.setText(I18n.t(language, "license.registering"));
+        messageLabel.setForeground(AppTheme.SUCCESS);
+        SwingWorker<LicenseStatus, Void> worker = new SwingWorker<LicenseStatus, Void>() {
+            @Override
+            protected LicenseStatus doInBackground() throws Exception {
+                return licenseRepository.registerLicense(key, session.getUsername());
             }
-            try {
-                LicenseStatus registered = licenseRepository.registerLicense(key, session.getUsername());
-                if (registered.isValid()) {
-                    AppLogger.userAction("LICENSE_REGISTER_SUCCESS", "username=" + session.getUsername()
-                            + " | validUntil=" + registered.getValidUntil());
-                    AppMessages.success(this, I18n.t(language, "license.register.success")
-                            + registered.getValidUntil());
-                    return true;
+
+            @Override
+            protected void done() {
+                try {
+                    LicenseStatus registered = get();
+                    if (registered.isValid()) {
+                        AppLogger.userAction("LICENSE_REGISTER_SUCCESS", "username=" + session.getUsername()
+                                + " | validUntil=" + registered.getValidUntil());
+                        AppMessages.success(LoginFrame.this, I18n.t(language, "license.register.success")
+                                + registered.getValidUntil());
+                        loadWorkspace(session);
+                    } else {
+                        AppMessages.error(LoginFrame.this, I18n.t(language, "message.error.title"), I18n.t(language, "license.invalid"));
+                        promptAndRegisterLicense(session);
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    showLicenseFailure(I18n.t(language, "login.interrupted"), ex);
+                } catch (ExecutionException ex) {
+                    Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+                    showLicenseFailure(I18n.t(language, "license.save.failed"), cause);
                 }
-                AppMessages.error(this, I18n.t(language, "message.error.title"), I18n.t(language, "license.invalid"));
-            } catch (SQLException e) {
-                AppLogger.error("License registration failed.", e);
-                AppMessages.error(this, I18n.t(language, "message.error.title"), I18n.t(language, "license.save.failed"));
-                return false;
             }
+        };
+        worker.execute();
+    }
+
+    private String showLicensePrompt() {
+        final JDialog dialog = new JDialog(this, I18n.t(language, "license.prompt.title"), true);
+        final JTextField keyField = new JTextField();
+        final String[] result = new String[1];
+
+        JPanel root = new JPanel(new BorderLayout(0, 14));
+        root.setBackground(AppTheme.PAGE_BACKGROUND);
+        root.setBorder(AppTheme.emptyBorder(18, 18, 18, 18));
+
+        JLabel message = new JLabel("<html>" + I18n.t(language, "license.prompt.message") + "</html>");
+        message.setForeground(AppTheme.TEXT_PRIMARY);
+        message.setFont(AppTheme.font(Font.PLAIN, 13));
+        root.add(message, BorderLayout.NORTH);
+
+        keyField.setPreferredSize(new Dimension(420, 34));
+        keyField.putClientProperty("JComponent.roundRect", Boolean.TRUE);
+        root.add(keyField, BorderLayout.CENTER);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        actions.setOpaque(false);
+        JButton cancel = new JButton(I18n.t(language, "dialog.confirm.cancel"));
+        JButton confirm = new JButton(I18n.t(language, "dialog.confirm.ok"));
+        cancel.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                dialog.dispose();
+            }
+        });
+        confirm.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                result[0] = keyField.getText();
+                dialog.dispose();
+            }
+        });
+        actions.add(cancel);
+        actions.add(confirm);
+        root.add(actions, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.getRootPane().setDefaultButton(confirm);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+        if (result[0] == null) {
+            return null;
         }
+        return result[0].trim();
+    }
+
+    private void loadWorkspace(final UserSession session) {
+        messageLabel.setText(I18n.t(language, "workspace.loading"));
+        messageLabel.setForeground(AppTheme.SUCCESS);
+        SwingWorker<List<ModulePageData>, Void> worker = new SwingWorker<List<ModulePageData>, Void>() {
+            @Override
+            protected List<ModulePageData> doInBackground() throws Exception {
+                return MainFrame.loadModulesForStartup();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    List<ModulePageData> modules = get();
+                    AppLogger.userAction("LOGIN_SUCCESS", "username=" + session.getUsername());
+                    MainFrame mainFrame = new MainFrame(session, modules);
+                    mainFrame.setVisible(true);
+                    AppMessages.success(mainFrame, I18n.t(session.getLanguage(), "message.login.success"));
+                    dispose();
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    showLoginFailure(I18n.t(language, "login.interrupted"), ex);
+                } catch (ExecutionException ex) {
+                    Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+                    showLoginFailure(I18n.t(language, "login.failed.generic"), cause);
+                }
+            }
+        };
+        worker.execute();
+    }
+
+    private void showLicenseFailure(String message, Throwable throwable) {
+        AppLogger.error("License step failed.", throwable);
+        messageLabel.setText(message);
+        messageLabel.setForeground(AppTheme.ERROR);
+        AppMessages.error(this, I18n.t(language, "message.error.title"), message);
+        setLoginEnabled(true);
     }
 
     private void setLoginEnabled(boolean enabled) {
@@ -530,13 +643,4 @@ public class LoginFrame extends JFrame {
         }
     }
 
-    private static final class LoginResult {
-        private final UserSession session;
-        private final List<ModulePageData> modules;
-
-        private LoginResult(UserSession session, List<ModulePageData> modules) {
-            this.session = session;
-            this.modules = modules;
-        }
-    }
 }

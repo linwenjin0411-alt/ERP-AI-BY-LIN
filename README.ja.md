@@ -15,7 +15,7 @@
 - 既定言語：英語
 - UI 言語：英語、日本語、簡体字中国語
 - 言語切替付きログイン画面
-- ワークスペースを開く前の License 検証。オンライン API 検証とオフライン署名 License のフォールバックに対応
+- ワークスペースを開く前の License 検証。データベースモードではオンライン API 検証が必須
 - ログイン後の ERP Cockpit
 - SAP / mcframe を参考にしたモジュール構成と業務フロー
 - MySQL ベースのユーザー、会社、ロール、メニュー、ロールメニュー権限テーブル
@@ -126,10 +126,7 @@ logs/YYYYMMDD/
 
 ユーザー ID とパスワードが承認された後、ログインフローは ERP ワークスペースを開く前に License を検証します。有効な License が存在しない場合、ログイン画面は英語、簡体字中国語、または日本語のローカライズ済みプロンプトを表示し、License key の入力を求めます。
 
-License 検証は 2 つの方式に対応します。
-
-- `license.verifyApiUrl` によるオンライン API 検証
-- オフライン署名 License 検証
+データベースモードでは、`license.verifyApiUrl` によるオンライン API 検証が必須です。ローカル demo license は MySQL が無効な場合のみ使用します。
 
 通常のデプロイでは、オンライン検証 API を次のファイルに設定します。
 
@@ -147,15 +144,15 @@ license.timeoutMs=5000
 
 アプリケーションは `product_code=LinovaOneERP`、`user_code`、およびユーザーが License を入力した場合の `license_key` を自動的に追加します。
 
-MySQL が有効な場合、License レコードは `erp_licenses` にキャッシュされます。active で未期限切れの License が存在する場合でも、アプリケーションは設定済み API で確認してからログインを許可します。有効な License が存在しない、または検証に失敗した場合、ログイン画面は License key の入力を求めます。
+MySQL が有効な場合、License レコードは `erp_licenses` に保存されますが、オフライン許可としては扱いません。保存済み key が存在する場合でも、アプリケーションは同じ key を設定済み API で確認してからログインを許可します。key が存在しない、または検証に失敗した場合、ログイン画面は License key の入力を求め、API は `ok=true`、一致する product、期限内の `expires_at` を返す必要があります。
 
-オフライン署名 License は次の形式を使用します。
+旧オフライン署名検証器は互換性確認のためコード内に残っていますが、データベースモードの正式な許可経路ではありません。過去の署名 License は次の形式を使用します。
 
 ```text
 LINOVA-yyyyMMdd-signature
 ```
 
-日付部分は License の有効期限です。署名部分はアプリケーションの公開鍵で検証されるため、未来日付だけでは有効な License を作成できません。
+日付部分は License の有効期限です。署名部分はアプリケーションの公開鍵で検証されるため、未来日付だけでは有効な License を作成できません。オンライン拒否はこの互換検証器で迂回されません。
 
 ```text
 Example structure only: LINOVA-20271231-<signature>
@@ -256,7 +253,7 @@ Role: System Administrator
 pom.xml
 ```
 
-アプリケーション jar、`build/` のビルド出力、`target/` の Maven 出力はローカルで生成されます。クローン後、ビルドマシンに JDK と Maven をインストールし、`run.bat --compile-only` を実行し、`config/db.properties.example` を `config/db.properties` にコピーして実データベース値を設定した後、`run.bat --init-db` または `LinovaOneERP.exe` のダブルクリックで起動します。
+アプリケーション jar、`build/` のビルド出力、`target/` の Maven 出力はローカルで生成されます。クローン後、ビルドマシンに JDK と Maven をインストールし、`run.bat` を実行するとローカル demo 起動できます。データベース配置では、自動生成された `config/db.properties` を編集して実データベース値を設定し、`config/license.properties` を設定した後、`run.bat --init-db` を実行します。
 
 ## モジュール
 

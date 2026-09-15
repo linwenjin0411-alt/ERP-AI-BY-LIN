@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DbItemMasterRepository {
+    private static final List<ItemMasterRecord> DEMO_ITEMS = createDemoItems();
+
     private final DbConfig config;
 
     public DbItemMasterRepository(DbConfig config) {
@@ -17,6 +19,11 @@ public class DbItemMasterRepository {
     }
 
     public List<ItemMasterRecord> loadItems() throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_ITEMS) {
+                return copyDemoItems();
+            }
+        }
         Connection connection = null;
         PreparedStatement statement = null;
         ResultSet resultSet = null;
@@ -48,6 +55,12 @@ public class DbItemMasterRepository {
     }
 
     public void createItem(ItemMasterRecord record) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_ITEMS) {
+                DEMO_ITEMS.add(record);
+            }
+            return;
+        }
         Connection connection = null;
         PreparedStatement statement = null;
         try {
@@ -66,6 +79,17 @@ public class DbItemMasterRepository {
     }
 
     public void updateItem(String originalItemCode, ItemMasterRecord record) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_ITEMS) {
+                for (int i = 0; i < DEMO_ITEMS.size(); i++) {
+                    if (originalItemCode.equals(DEMO_ITEMS.get(i).getItemCode())) {
+                        DEMO_ITEMS.set(i, record);
+                        return;
+                    }
+                }
+            }
+            return;
+        }
         Connection connection = null;
         PreparedStatement statement = null;
         try {
@@ -84,6 +108,16 @@ public class DbItemMasterRepository {
     }
 
     public void deleteItem(String itemCode) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_ITEMS) {
+                for (int i = DEMO_ITEMS.size() - 1; i >= 0; i--) {
+                    if (itemCode.equals(DEMO_ITEMS.get(i).getItemCode())) {
+                        DEMO_ITEMS.remove(i);
+                    }
+                }
+            }
+            return;
+        }
         Connection connection = null;
         PreparedStatement statement = null;
         try {
@@ -196,5 +230,22 @@ public class DbItemMasterRepository {
         if (error != null) {
             throw error;
         }
+    }
+
+    private static List<ItemMasterRecord> createDemoItems() {
+        List<ItemMasterRecord> items = new ArrayList<ItemMasterRecord>();
+        items.add(new ItemMasterRecord("RM-1008", "Servo motor 2kW", "Purchased material", "EA", "JP01", "status.released", "500", "14"));
+        items.add(new ItemMasterRecord("PK-2210", "Export carton package", "Packaging", "EA", "JP01", "status.released", "1200", "7"));
+        items.add(new ItemMasterRecord("FG-3007", "Smart actuator assembly", "Finished good", "EA", "JP01", "status.open", "80", "21"));
+        return items;
+    }
+
+    private static List<ItemMasterRecord> copyDemoItems() {
+        List<ItemMasterRecord> copies = new ArrayList<ItemMasterRecord>();
+        for (ItemMasterRecord item : DEMO_ITEMS) {
+            copies.add(new ItemMasterRecord(item.getItemCode(), item.getItemName(), item.getItemType(),
+                    item.getUom(), item.getPlant(), item.getStatus(), item.getSafetyStock(), item.getLeadTimeDays()));
+        }
+        return copies;
     }
 }

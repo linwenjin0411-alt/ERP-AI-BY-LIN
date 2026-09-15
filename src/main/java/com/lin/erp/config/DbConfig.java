@@ -25,18 +25,19 @@ public class DbConfig {
     private final int socketTimeoutMs;
 
     private DbConfig(Properties properties) {
-        enabled = Boolean.parseBoolean(properties.getProperty("db.enabled", "false"));
-        fallbackToDemo = Boolean.parseBoolean(properties.getProperty("db.fallbackToDemo", "true"));
+        enabled = parseBoolean(properties, "db.enabled", false);
+        fallbackToDemo = parseBoolean(properties, "db.fallbackToDemo", true);
         host = properties.getProperty("db.host", "localhost").trim();
-        port = parseInt(properties.getProperty("db.port"), 3306);
+        port = parseInt(properties, "db.port", 3306, 1, 65535);
         database = properties.getProperty("db.database", "linova_erp").trim();
         username = properties.getProperty("db.username", "").trim();
         password = properties.getProperty("db.password", "");
-        useSsl = Boolean.parseBoolean(properties.getProperty("db.useSsl", "true"));
-        allowPublicKeyRetrieval = Boolean.parseBoolean(properties.getProperty("db.allowPublicKeyRetrieval", "false"));
+        useSsl = parseBoolean(properties, "db.useSsl", true);
+        allowPublicKeyRetrieval = parseBoolean(properties, "db.allowPublicKeyRetrieval", false);
         serverTimezone = properties.getProperty("db.serverTimezone", "UTC").trim();
-        connectTimeoutMs = parseInt(properties.getProperty("db.connectTimeoutMs"), 3000);
-        socketTimeoutMs = parseInt(properties.getProperty("db.socketTimeoutMs"), 5000);
+        connectTimeoutMs = parseInt(properties, "db.connectTimeoutMs", 3000, 500, 60000);
+        socketTimeoutMs = parseInt(properties, "db.socketTimeoutMs", 5000, 500, 120000);
+        validate();
     }
 
     public static DbConfig loadDefault() {
@@ -49,6 +50,7 @@ public class DbConfig {
                 properties.load(input);
             } catch (IOException e) {
                 AppLogger.error("Failed to read config/db.properties.", e);
+                throw new IllegalStateException("Cannot read config/db.properties. Check file permissions and encoding.", e);
             } finally {
                 if (input != null) {
                     try {
@@ -92,14 +94,55 @@ public class DbConfig {
         return host + ":" + port + "/" + database;
     }
 
-    private int parseInt(String value, int fallback) {
+    private void validate() {
+        if (!enabled) {
+            return;
+        }
+        if (host.length() == 0) {
+            throw new IllegalArgumentException("db.host is required when db.enabled=true.");
+        }
+        if (host.indexOf('/') >= 0 || host.indexOf('\\') >= 0 || host.indexOf('?') >= 0 || host.indexOf('#') >= 0) {
+            throw new IllegalArgumentException("db.host contains invalid URL characters.");
+        }
+        if (database.length() == 0) {
+            throw new IllegalArgumentException("db.database is required when db.enabled=true.");
+        }
+        if (database.indexOf('/') >= 0 || database.indexOf('\\') >= 0 || database.indexOf('?') >= 0 || database.indexOf('#') >= 0) {
+            throw new IllegalArgumentException("db.database contains invalid URL characters.");
+        }
+        if (serverTimezone.length() == 0) {
+            throw new IllegalArgumentException("db.serverTimezone is required.");
+        }
+    }
+
+    private static boolean parseBoolean(Properties properties, String key, boolean fallback) {
+        String value = properties.getProperty(key);
+        if (value == null || value.trim().length() == 0) {
+            return fallback;
+        }
+        String normalized = value.trim().toLowerCase();
+        if ("true".equals(normalized)) {
+            return true;
+        }
+        if ("false".equals(normalized)) {
+            return false;
+        }
+        throw new IllegalArgumentException(key + " must be true or false.");
+    }
+
+    private static int parseInt(Properties properties, String key, int fallback, int min, int max) {
+        String value = properties.getProperty(key);
         if (value == null || value.trim().length() == 0) {
             return fallback;
         }
         try {
-            return Integer.parseInt(value.trim());
+            int parsed = Integer.parseInt(value.trim());
+            if (parsed < min || parsed > max) {
+                throw new IllegalArgumentException(key + " must be between " + min + " and " + max + ".");
+            }
+            return parsed;
         } catch (NumberFormatException e) {
-            return fallback;
+            throw new IllegalArgumentException(key + " must be a number.", e);
         }
     }
 

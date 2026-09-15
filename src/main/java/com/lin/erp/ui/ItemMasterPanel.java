@@ -170,7 +170,9 @@ public class ItemMasterPanel extends JPanel {
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
                     logAction("ITEM_TABLE_DOUBLE_CLICK", "row=" + selectedRow());
-                    openForm(true);
+                    if (ensureActionAllowed("action.edit")) {
+                        openForm(true);
+                    }
                 }
             }
         });
@@ -262,11 +264,14 @@ public class ItemMasterPanel extends JPanel {
             return new DbRoleMenuPermissionRepository(DbConfig.loadDefault()).loadForMenu(session.getRoleCode(), "MASTER_ITEM");
         } catch (SQLException e) {
             AppLogger.error("Item master permission load failed.", e);
-            return RoleMenuPermission.viewOnly("MASTER_ITEM");
+            return RoleMenuPermission.none("MASTER_ITEM");
         }
     }
 
     private void openForm(boolean editMode) {
+        if (!ensureActionAllowed(editMode ? "action.edit" : "action.new")) {
+            return;
+        }
         int row = selectedRow();
         ItemMasterRecord selected = null;
         if (editMode) {

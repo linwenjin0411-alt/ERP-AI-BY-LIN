@@ -15,7 +15,7 @@
 - 默认语言：英文
 - UI 语言：英文、日文、简体中文
 - 带语言切换的登录画面
-- 打开工作台前进行 License 校验，支持在线 API 验证和离线签名 License 回退
+- 打开工作台前进行 License 校验，数据库模式必须通过在线 API 验证
 - 登录后的 ERP Cockpit 工作台
 - 参考 SAP / mcframe 的模块和业务流程结构
 - 基于 MySQL 的用户、公司、角色、菜单、角色菜单权限表
@@ -126,10 +126,7 @@ logs/YYYYMMDD/
 
 用户 ID 和密码通过后，登录流程会在打开 ERP 工作台前校验 License。如果不存在有效 License，登录窗口会显示英文、简体中文或日文的本地化提示，并要求输入 License key。
 
-License 校验支持两种模式：
-
-- 通过 `license.verifyApiUrl` 进行在线 API 验证
-- 离线签名 License 验证
+数据库模式必须通过 `license.verifyApiUrl` 进行在线 API 验证。本地 demo license 只在禁用 MySQL 时使用。
 
 正式部署时，在以下文件中配置在线验证 API：
 
@@ -147,15 +144,15 @@ license.timeoutMs=5000
 
 应用会自动追加 `product_code=LinovaOneERP`、`user_code`，并在用户输入 License 时追加 `license_key`。
 
-启用 MySQL 时，License 记录会缓存在 `erp_licenses`。如果存在 active 且未过期的 License，应用仍会通过配置的 API 再次确认，然后才允许登录。如果不存在有效 License 或验证失败，登录窗口会要求用户输入 License key。
+启用 MySQL 时，License 记录会保存到 `erp_licenses`，但它不是离线放行依据。如果存在已保存 key，应用会使用配置的 API 校验同一个 key 后才允许登录。如果没有 key 或校验失败，登录窗口会要求输入 License key，且 API 仍必须返回 `ok=true`、匹配产品和未过期的 `expires_at`。
 
-离线签名 License 使用以下格式：
+旧版离线签名验证器仍保留在代码中，用于兼容性评估，但不作为数据库模式的正式放行路径。历史签名 License 使用以下格式：
 
 ```text
 LINOVA-yyyyMMdd-signature
 ```
 
-日期部分是 License 到期日。签名部分会使用应用内置公钥验证，因此只写一个未来日期不能生成有效 License。
+日期部分是 License 到期日。签名部分会使用应用内置公钥验证，因此只写一个未来日期不能生成有效 License。在线拒绝不会被该兼容验证器绕过。
 
 ```text
 Example structure only: LINOVA-20271231-<signature>
@@ -256,7 +253,7 @@ Role: System Administrator
 pom.xml
 ```
 
-应用 jar、`build/` 构建输出和 `target/` Maven 输出会在本地生成。克隆后，在构建机器上安装 JDK 和 Maven，运行 `run.bat --compile-only`，将 `config/db.properties.example` 复制为 `config/db.properties`，填写真实数据库值，然后运行 `run.bat --init-db` 或双击 `LinovaOneERP.exe`。
+应用 jar、`build/` 构建输出和 `target/` Maven 输出会在本地生成。克隆后，在构建机器上安装 JDK 和 Maven，直接运行 `run.bat` 可进入本地演示启动。数据库部署时，编辑自动生成的 `config/db.properties`，填写真实数据库值，配置 `config/license.properties`，然后运行 `run.bat --init-db`。
 
 ## 模块
 

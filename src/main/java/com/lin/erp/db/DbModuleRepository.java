@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 public class DbModuleRepository {
+    private static final Map<String, ModulePageData> DEMO_MODULES = createDemoModules();
+
     private final DbConfig config;
 
     public DbModuleRepository(DbConfig config) {
@@ -20,6 +22,9 @@ public class DbModuleRepository {
     }
 
     public List<ModulePageData> loadModules() throws SQLException {
+        if (!config.isEnabled()) {
+            return copyDemoModules();
+        }
         Connection connection = null;
         try {
             connection = Database.connect(config);
@@ -39,6 +44,17 @@ public class DbModuleRepository {
     }
 
     public int insertTableRow(String moduleCode, String[] values) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_MODULES) {
+                ModulePageData module = DEMO_MODULES.get(moduleCode);
+                if (module == null) {
+                    return 10;
+                }
+                int sortOrder = nextDemoSortOrder(module);
+                module.addTableRow(sortOrder, copy(values));
+                return sortOrder;
+            }
+        }
         Connection connection = null;
         PreparedStatement nextStatement = null;
         ResultSet resultSet = null;
@@ -74,6 +90,15 @@ public class DbModuleRepository {
     }
 
     public void updateTableRow(String moduleCode, int sortOrder, String[] values) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_MODULES) {
+                ModulePageData module = DEMO_MODULES.get(moduleCode);
+                if (module != null) {
+                    replaceDemoRow(module, sortOrder, values);
+                }
+            }
+            return;
+        }
         Connection connection = null;
         PreparedStatement statement = null;
         try {
@@ -97,6 +122,21 @@ public class DbModuleRepository {
     }
 
     public void updateTableRowStatus(String moduleCode, int sortOrder, int statusColumnIndex, String statusValue) throws SQLException {
+        if (!config.isEnabled()) {
+            synchronized (DEMO_MODULES) {
+                ModulePageData module = DEMO_MODULES.get(moduleCode);
+                if (module != null) {
+                    int index = module.getTableRowSortOrders().indexOf(Integer.valueOf(sortOrder));
+                    if (index >= 0 && index < module.getTableRows().size()) {
+                        String[] row = module.getTableRows().get(index);
+                        if (statusColumnIndex >= 0 && statusColumnIndex < row.length) {
+                            row[statusColumnIndex] = statusValue;
+                        }
+                    }
+                }
+            }
+            return;
+        }
         Connection connection = null;
         PreparedStatement statement = null;
         try {
@@ -301,5 +341,128 @@ public class DbModuleRepository {
                 statement.setString(startIndex + i, value.trim());
             }
         }
+    }
+
+    private static Map<String, ModulePageData> createDemoModules() {
+        Map<String, ModulePageData> modules = new LinkedHashMap<String, ModulePageData>();
+        addDemoModule(modules, "DASHBOARD", "app.title", "brand.flow", "DASHBOARD",
+                new String[]{"action.refresh"},
+                new String[]{"column.id", "column.status", "column.owner"},
+                new String[][]{{"TODAY", "status.ready", "owner.system"}});
+        addDemoModule(modules, "MASTER", "cap.master", "master.subtitle", "OPERATIONAL",
+                defaultActions(),
+                new String[]{"column.id", "column.item", "column.name", "column.status"},
+                new String[][]{{"MAT-001", "FG-3007", "Smart actuator assembly", "status.open"}});
+        addDemoModule(modules, "PROCUREMENT", "cap.procurement", "procurement.subtitle", "OPERATIONAL",
+                workflowActions(),
+                new String[]{"column.id", "column.supplier", "column.item", "column.qty", "column.status"},
+                new String[][]{{"PO-DEMO-001", "SUP-2007", "RM-1008", "10", "status.open"}});
+        addDemoModule(modules, "SALES", "cap.sales", "sales.subtitle", "OPERATIONAL",
+                workflowActions(),
+                new String[]{"column.id", "column.customer", "column.item", "column.qty", "column.status"},
+                new String[][]{{"SO-DEMO-001", "CUS-3001", "FG-3007", "6", "status.open"}});
+        addDemoModule(modules, "INVENTORY", "cap.inventory", "inventory.subtitle", "OPERATIONAL",
+                defaultActions(),
+                new String[]{"column.id", "column.item", "column.warehouse", "column.qty", "column.status"},
+                new String[][]{{"STK-DEMO-001", "FG-3007", "FG-01", "24", "status.ready"}});
+        addDemoModule(modules, "MANUFACTURING", "cap.manufacturing", "manufacturing.subtitle", "OPERATIONAL",
+                workflowActions(),
+                new String[]{"column.id", "column.item", "column.qty", "column.status", "column.next"},
+                new String[][]{{"MO-DEMO-001", "FG-3007", "3", "status.open", "action.release"}});
+        addDemoModule(modules, "FINANCE", "cap.finance", "finance.subtitle", "OPERATIONAL",
+                defaultActions(),
+                new String[]{"column.id", "column.customer", "column.amount", "column.status"},
+                new String[][]{{"AR-DEMO-001", "CUS-3001", "600", "status.open"}});
+        addDemoModule(modules, "AI", "cap.ai", "ai.subtitle", "AI",
+                new String[]{"action.refresh", "action.ask", "action.export"},
+                new String[]{"column.id", "column.status", "column.next"},
+                new String[][]{{"AI-DEMO-001", "status.ready", "action.details"}});
+        addDemoModule(modules, "ADMIN", "cap.admin", "admin.subtitle", "OPERATIONAL",
+                defaultActions(),
+                new String[]{"column.id", "column.owner", "column.status"},
+                new String[][]{{"USR-admin", "owner.system", "status.open"}});
+        return modules;
+    }
+
+    private static String[] defaultActions() {
+        return new String[]{"action.refresh", "action.new", "action.edit", "action.export"};
+    }
+
+    private static String[] workflowActions() {
+        return new String[]{"action.refresh", "action.new", "action.edit", "action.release", "action.post", "action.export"};
+    }
+
+    private static void addDemoModule(Map<String, ModulePageData> modules, String code, String titleKey, String subtitleKey,
+                                      String pageType, String[] actions, String[] columns, String[][] rows) {
+        ModulePageData module = new ModulePageData(code, titleKey, subtitleKey, pageType,
+                "table.records", "panel.process", "panel.todo", null);
+        for (String action : actions) {
+            module.getActions().add(action);
+        }
+        module.getProcessSteps().add("process.create");
+        module.getProcessSteps().add("process.review");
+        module.getProcessSteps().add("process.complete");
+        module.getMetrics().add(new ModulePageData.Metric("TOP", "panel.kpi", String.valueOf(rows.length), "status.ready", "accent"));
+        for (String column : columns) {
+            module.getTableColumns().add(column);
+        }
+        int sortOrder = 10;
+        for (String[] row : rows) {
+            module.addTableRow(sortOrder, copy(row));
+            sortOrder += 10;
+        }
+        module.getFocusItems().add("Demo data is stored locally for this session.");
+        modules.put(code, module);
+    }
+
+    private static List<ModulePageData> copyDemoModules() {
+        synchronized (DEMO_MODULES) {
+            List<ModulePageData> copies = new ArrayList<ModulePageData>();
+            for (ModulePageData module : DEMO_MODULES.values()) {
+                copies.add(copyModule(module));
+            }
+            return copies;
+        }
+    }
+
+    private static ModulePageData copyModule(ModulePageData source) {
+        ModulePageData copy = new ModulePageData(source.getCode(), source.getTitleKey(), source.getSubtitleKey(),
+                source.getPageType(), source.getTableTitleKey(), source.getProcessTitleKey(),
+                source.getFocusTitleKey(), source.getPromptValue());
+        copy.getActions().addAll(source.getActions());
+        copy.getProcessSteps().addAll(source.getProcessSteps());
+        copy.getMetrics().addAll(source.getMetrics());
+        copy.getTableColumns().addAll(source.getTableColumns());
+        for (int i = 0; i < source.getTableRows().size(); i++) {
+            copy.addTableRow(source.getTableRowSortOrders().get(i).intValue(), copy(source.getTableRows().get(i)));
+        }
+        copy.getFocusItems().addAll(source.getFocusItems());
+        return copy;
+    }
+
+    private static int nextDemoSortOrder(ModulePageData module) {
+        int max = 0;
+        for (Integer sortOrder : module.getTableRowSortOrders()) {
+            if (sortOrder != null && sortOrder.intValue() > max) {
+                max = sortOrder.intValue();
+            }
+        }
+        return max + 10;
+    }
+
+    private static void replaceDemoRow(ModulePageData module, int sortOrder, String[] values) {
+        int index = module.getTableRowSortOrders().indexOf(Integer.valueOf(sortOrder));
+        if (index >= 0 && index < module.getTableRows().size()) {
+            module.getTableRows().set(index, copy(values));
+        }
+    }
+
+    private static String[] copy(String[] values) {
+        if (values == null) {
+            return new String[0];
+        }
+        String[] copy = new String[values.length];
+        System.arraycopy(values, 0, copy, 0, values.length);
+        return copy;
     }
 }

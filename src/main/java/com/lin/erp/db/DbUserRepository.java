@@ -97,6 +97,32 @@ public class DbUserRepository {
         }
     }
 
+    public int countActiveAdministrators() throws SQLException {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        ResultSet resultSet = null;
+        try {
+            connection = Database.connect(config);
+            statement = connection.prepareStatement(
+                    "select count(*) from erp_users u "
+                            + "join erp_roles r on r.id = u.role_id and r.active = 1 "
+                            + "where u.active = 1 and upper(r.code) = 'ADMIN'"
+            );
+            resultSet = statement.executeQuery();
+            return resultSet.next() ? resultSet.getInt(1) : 0;
+        } finally {
+            if (resultSet != null) {
+                resultSet.close();
+            }
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+
     public void createInitialAdmin(String passwordHash) throws SQLException {
         Connection connection = null;
         PreparedStatement statement = null;
@@ -109,7 +135,10 @@ public class DbUserRepository {
                             + "where c.code = 'LINOVA' and r.code = 'ADMIN'"
             );
             statement.setString(1, passwordHash);
-            statement.executeUpdate();
+            int inserted = statement.executeUpdate();
+            if (inserted != 1) {
+                throw new SQLException("Initial administrator was not created. Check that company LINOVA and role ADMIN exist.");
+            }
         } finally {
             if (statement != null) {
                 statement.close();

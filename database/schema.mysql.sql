@@ -391,6 +391,9 @@ create table if not exists erp_licenses (
   valid_from date not null,
   valid_until date not null,
   active tinyint(1) not null default 1,
+  created_by varchar(80),
+  updated_by varchar(80),
+  source_machine varchar(160),
   created_at timestamp not null default current_timestamp,
   updated_at timestamp not null default current_timestamp on update current_timestamp
 ) engine=InnoDB default charset=utf8mb4;

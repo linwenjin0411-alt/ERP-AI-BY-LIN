@@ -26,6 +26,10 @@ try {
         throw "Launcher build failed."
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($RuntimePath) -and -not (Test-Path -LiteralPath $RuntimePath)) {
+        throw "RuntimePath does not exist: $RuntimePath"
+    }
+
     if (Test-Path -LiteralPath $distDir) {
         Remove-Item -LiteralPath $distDir -Recurse -Force
     }
@@ -41,12 +45,10 @@ try {
     Copy-Item -LiteralPath (Join-Path $rootDir "run.bat") -Destination (Join-Path $distDir "run.bat") -Force
     Copy-Item -LiteralPath $jarPath -Destination (Join-Path $distDir "target\linova-one-erp.jar") -Force
     Copy-Item -LiteralPath (Join-Path $rootDir "config\db.properties.example") -Destination (Join-Path $distDir "config\db.properties.example") -Force
+    Copy-Item -LiteralPath (Join-Path $rootDir "config\license.properties.example") -Destination (Join-Path $distDir "config\license.properties.example") -Force
     Copy-Item -LiteralPath (Join-Path $rootDir "database\schema.mysql.sql") -Destination (Join-Path $distDir "database\schema.mysql.sql") -Force
 
     if (-not [string]::IsNullOrWhiteSpace($RuntimePath)) {
-        if (-not (Test-Path -LiteralPath $RuntimePath)) {
-            throw "RuntimePath does not exist: $RuntimePath"
-        }
         Copy-Item -LiteralPath $RuntimePath -Destination (Join-Path $distDir "runtime") -Recurse -Force
     }
 
@@ -56,14 +58,21 @@ Linova One ERP delivery package
 Start:
   Double-click LinovaOneERP.exe
 
-Required before first run:
-  1. Copy config\db.properties.example to config\db.properties.
-  2. Fill in real database connection values.
-  3. Run run.bat --init-db.
-  4. Enter/register a signed license key when prompted.
+First run:
+  Double-click LinovaOneERP.exe. The startup script creates config\db.properties
+  and config\license.properties from the bundled templates when they are missing.
+  With the bundled default db.enabled=false, the app starts in local demo mode and
+  does not connect to MySQL.
+
+Database deployment:
+  1. Edit config\db.properties and set db.enabled=true plus real database values.
+  2. Edit config\license.properties and set the HTTPS license verification API.
+  3. Run run.bat --init-db and set the initial administrator password.
+  4. Sign in with the database administrator and register the online license key.
 
 Optional bundled runtime:
-  Put a Windows JRE under runtime\ or pass -RuntimePath to build-distribution.ps1.
+  Pass -RuntimePath to build-distribution.ps1 to include a Windows JRE under runtime\.
+  Packages without runtime\ require a compatible Java installation on the workstation.
 
 Do not commit:
   config\db.properties

@@ -24,6 +24,9 @@ public class DbMenuRepository {
     }
 
     public Map<String, List<MenuNode>> loadChildrenByModule(String roleCode) throws SQLException {
+        if (!config.isEnabled()) {
+            return new LinkedHashMap<String, List<MenuNode>>();
+        }
         Connection connection = null;
         PreparedStatement statement = null;
         ResultSet resultSet = null;
