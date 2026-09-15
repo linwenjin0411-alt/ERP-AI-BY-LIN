@@ -1,26 +1,89 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
+
 set "APP_JAR=target\linova-one-erp.jar"
 set "MAVEN_REPO=build\maven-repository"
 set "JAVA_CMD=java"
 set "JAVAW_CMD=javaw"
+set "BUILD_ONLY=0"
+set "NEED_BUILD=0"
 
 if exist "runtime\bin\java.exe" set "JAVA_CMD=%CD%\runtime\bin\java.exe"
 if exist "runtime\bin\javaw.exe" set "JAVAW_CMD=%CD%\runtime\bin\javaw.exe"
 
 if /i "%~1"=="--compile-only" (
-  call :build_app
-  if errorlevel 1 exit /b 1
+  set "BUILD_ONLY=1"
+  set "NEED_BUILD=1"
+)
+
+if "%BUILD_ONLY%"=="0" (
+  if not exist "config" mkdir "config"
+  if not exist "config" (
+    echo [ERROR] Failed to create config directory.
+    exit /b 1
+  )
+  if not exist "config\db.properties" (
+    if exist "config\db.properties.example" (
+      copy /y "config\db.properties.example" "config\db.properties" >nul
+      if errorlevel 1 (
+        echo [ERROR] Failed to create config\db.properties.
+        exit /b 1
+      )
+      echo Created config\db.properties from template.
+    ) else (
+      echo [ERROR] Missing config\db.properties.example.
+      exit /b 1
+    )
+  )
+  if not exist "config\license.properties" (
+    if exist "config\license.properties.example" (
+      copy /y "config\license.properties.example" "config\license.properties" >nul
+      if errorlevel 1 (
+        echo [ERROR] Failed to create config\license.properties.
+        exit /b 1
+      )
+      echo Created config\license.properties from template.
+    ) else (
+      echo [ERROR] Missing config\license.properties.example.
+      exit /b 1
+    )
+  )
+)
+
+if not exist "%APP_JAR%" (
+  echo Application jar was not found. Building it now...
+  set "NEED_BUILD=1"
+)
+
+if "%NEED_BUILD%"=="1" (
+  where mvn >nul 2>nul
+  if errorlevel 1 (
+    echo [ERROR] Apache Maven was not found.
+    echo Install Maven 3.8 or newer, then run this command again.
+    echo Maven downloads FlatLaf and MySQL Connector/J automatically; jar files are not committed.
+    exit /b 1
+  )
+
+  echo Building Linova One ERP with Maven...
+  if not exist "build" mkdir "build"
+  call mvn -q -DskipTests "-Dmaven.repo.local=%MAVEN_REPO%" package
+  if errorlevel 1 (
+    echo.
+    echo [ERROR] Maven build failed.
+    exit /b 1
+  )
+
+  if not exist "%APP_JAR%" (
+    echo [ERROR] Built application jar was not found: %APP_JAR%
+    exit /b 1
+  )
+)
+
+if "%BUILD_ONLY%"=="1" (
   echo Compile finished.
   exit /b 0
 )
-
-call :ensure_local_config
-if errorlevel 1 exit /b 1
-
-call :ensure_app_jar
-if errorlevel 1 exit /b 1
 
 if /i "%~1"=="--init-db" (
   echo Initializing Linova One ERP database...
@@ -60,69 +123,4 @@ if errorlevel 1 (
 )
 
 endlocal
-exit /b 0
-
-:ensure_app_jar
-if exist "%APP_JAR%" exit /b 0
-echo Application jar was not found. Building it now...
-call :build_app
-if errorlevel 1 exit /b 1
-exit /b 0
-
-:ensure_local_config
-if not exist "config" mkdir "config"
-if not exist "config" (
-  echo [ERROR] Failed to create config directory.
-  exit /b 1
-)
-if not exist "config\db.properties" (
-  if exist "config\db.properties.example" (
-    copy /y "config\db.properties.example" "config\db.properties" >nul
-    if errorlevel 1 (
-      echo [ERROR] Failed to create config\db.properties.
-      exit /b 1
-    )
-    echo Created config\db.properties from template.
-  ) else (
-    echo [ERROR] Missing config\db.properties.example.
-    exit /b 1
-  )
-)
-if not exist "config\license.properties" (
-  if exist "config\license.properties.example" (
-    copy /y "config\license.properties.example" "config\license.properties" >nul
-    if errorlevel 1 (
-      echo [ERROR] Failed to create config\license.properties.
-      exit /b 1
-    )
-    echo Created config\license.properties from template.
-  ) else (
-    echo [ERROR] Missing config\license.properties.example.
-    exit /b 1
-  )
-)
-exit /b 0
-
-:build_app
-where mvn >nul 2>nul
-if errorlevel 1 (
-  echo [ERROR] Apache Maven was not found.
-  echo Install Maven 3.8 or newer, then run this command again.
-  echo Maven downloads FlatLaf and MySQL Connector/J automatically; jar files are not committed.
-  exit /b 1
-)
-
-echo Building Linova One ERP with Maven...
-if not exist build mkdir build
-call mvn -q -DskipTests "-Dmaven.repo.local=%MAVEN_REPO%" package
-if errorlevel 1 (
-  echo.
-  echo [ERROR] Maven build failed.
-  exit /b 1
-)
-
-if not exist "%APP_JAR%" (
-  echo [ERROR] Built application jar was not found: %APP_JAR%
-  exit /b 1
-)
 exit /b 0
