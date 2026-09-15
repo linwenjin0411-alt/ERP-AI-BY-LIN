@@ -53,9 +53,9 @@ Linova One ERP 是面向制造业业务的桌面 ERP 原型。当前覆盖主数
 Double-click LinovaOneERP.exe
 ```
 
-日常桌面使用建议从 `LinovaOneERP.exe` 启动。它会在后台启动 `run.bat`，不会打开命令行窗口。
+日常桌面使用建议从 `LinovaOneERP.exe` 启动。它会在后台启动 `run.bat`，不会打开命令行窗口，并在准备应用时显示一个启动提示窗口。
 
-打开 `LinovaOneERP.exe` 时，启动器会用 `javaw` 启动现有的 `target/linova-one-erp.jar`。日常启动不会运行 Maven。
+打开 `LinovaOneERP.exe` 时，启动器会启动 `run.bat`。如果 fresh clone 后缺少 `target/linova-one-erp.jar`，`run.bat` 会先用 Maven 构建，首次启动可能需要几分钟。如果应用窗口打开前启动失败，启动器会弹出错误，并在 `logs/YYYYMMDD/` 下写入启动日志。
 
 维护用命令行启动：
 

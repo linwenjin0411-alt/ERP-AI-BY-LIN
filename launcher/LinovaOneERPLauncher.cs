@@ -1,14 +1,61 @@
-using System;
+﻿using System;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Linova One ERP")]
 [assembly: AssemblyProduct("Linova One ERP")]
 [assembly: AssemblyCompany("Linova")]
-[assembly: AssemblyFileVersion("1.0.0.3")]
-[assembly: AssemblyInformationalVersion("1.0.0.3")]
+[assembly: AssemblyFileVersion("1.0.0.4")]
+[assembly: AssemblyInformationalVersion("1.0.0.4")]
+
+internal sealed class StartupForm : Form
+{
+    public StartupForm()
+    {
+        Text = "Linova One ERP";
+        Width = 460;
+        Height = 170;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        StartPosition = FormStartPosition.CenterScreen;
+        ShowInTaskbar = true;
+
+        TableLayoutPanel layout = new TableLayoutPanel();
+        layout.Dock = DockStyle.Fill;
+        layout.Padding = new Padding(22, 18, 22, 18);
+        layout.RowCount = 2;
+        layout.ColumnCount = 1;
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 70F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
+
+        Label messageLabel = new Label();
+        messageLabel.Dock = DockStyle.Fill;
+        messageLabel.TextAlign = ContentAlignment.MiddleLeft;
+        messageLabel.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+        messageLabel.Text = "Starting Linova One ERP...\r\n正在加载应用 JAR，请稍候。\r\nThe first start after clone may build the JAR and take a few minutes.";
+        layout.Controls.Add(messageLabel, 0, 0);
+
+        ProgressBar progress = new ProgressBar();
+        progress.Dock = DockStyle.Fill;
+        progress.Style = ProgressBarStyle.Marquee;
+        progress.MarqueeAnimationSpeed = 28;
+        layout.Controls.Add(progress, 0, 1);
+
+        Controls.Add(layout);
+    }
+}
+
+internal sealed class StartupResult
+{
+    public int ExitCode = 1;
+    public string LogPath = String.Empty;
+    public Exception Error;
+}
 
 public static class LinovaOneERPLauncher
 {
@@ -47,14 +94,60 @@ public static class LinovaOneERPLauncher
                 commandProcessor = "cmd.exe";
             }
 
-            ProcessStartInfo startInfo = new ProcessStartInfo();
-            startInfo.FileName = commandProcessor;
-            startInfo.Arguments = "/d /s /c " + BuildCmdCommand(batchPath, args);
-            startInfo.WorkingDirectory = rootDir;
-            startInfo.UseShellExecute = false;
-            startInfo.CreateNoWindow = true;
-            startInfo.WindowStyle = ProcessWindowStyle.Hidden;
-            Process.Start(startInfo);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            StartupResult result = new StartupResult();
+            using (StartupForm startupForm = new StartupForm())
+            {
+                startupForm.Shown += delegate
+                {
+                    Thread worker = new Thread(delegate()
+                    {
+                        try
+                        {
+                            result.ExitCode = RunBatch(commandProcessor, batchPath, args, rootDir, result);
+                        }
+                        catch (Exception ex)
+                        {
+                            result.Error = ex;
+                            result.ExitCode = 1;
+                        }
+                        finally
+                        {
+                            if (!startupForm.IsDisposed)
+                            {
+                                startupForm.BeginInvoke(new MethodInvoker(delegate { startupForm.Close(); }));
+                            }
+                        }
+                    });
+                    worker.IsBackground = true;
+                    worker.Start();
+                };
+                Application.Run(startupForm);
+            }
+
+            if (result.Error != null)
+            {
+                MessageBox.Show(
+                    "Could not start Linova One ERP.\r\n\r\n" + result.Error.Message,
+                    "Linova One ERP",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return 1;
+            }
+
+            if (result.ExitCode != 0)
+            {
+                string logHint = String.IsNullOrEmpty(result.LogPath) ? String.Empty : "\r\n\r\nStartup log:\r\n" + result.LogPath;
+                MessageBox.Show(
+                    "Linova One ERP startup failed before the app window opened.\r\n\r\nRun run.bat from this folder to see the full error. Make sure JDK and Maven are installed when starting from a fresh clone." + logHint,
+                    "Linova One ERP",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return result.ExitCode;
+            }
+
             return 0;
         }
         catch (Exception ex)
@@ -66,6 +159,67 @@ public static class LinovaOneERPLauncher
                 MessageBoxIcon.Error);
             return 1;
         }
+    }
+
+    private static int RunBatch(string commandProcessor, string batchPath, string[] args, string rootDir, StartupResult result)
+    {
+        ProcessStartInfo startInfo = new ProcessStartInfo();
+        startInfo.FileName = commandProcessor;
+        startInfo.Arguments = "/d /s /c " + BuildCmdCommand(batchPath, args);
+        startInfo.WorkingDirectory = rootDir;
+        startInfo.UseShellExecute = false;
+        startInfo.CreateNoWindow = true;
+        startInfo.WindowStyle = ProcessWindowStyle.Hidden;
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+
+        using (StreamWriter logWriter = CreateStartupLog(rootDir, result))
+        using (Process process = new Process())
+        {
+            process.StartInfo = startInfo;
+            process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
+            {
+                WriteLogLine(logWriter, e.Data);
+            };
+            process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
+            {
+                WriteLogLine(logWriter, e.Data);
+            };
+            WriteLogLine(logWriter, "Starting command: " + startInfo.FileName + " " + startInfo.Arguments);
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            process.WaitForExit();
+            WriteLogLine(logWriter, "Exit code: " + process.ExitCode);
+            return process.ExitCode;
+        }
+    }
+
+    private static StreamWriter CreateStartupLog(string rootDir, StartupResult result)
+    {
+        try
+        {
+            string logDir = Path.Combine(rootDir, "logs", DateTime.Now.ToString("yyyyMMdd"));
+            Directory.CreateDirectory(logDir);
+            string logPath = Path.Combine(logDir, "launcher-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + ".log");
+            result.LogPath = logPath;
+            return new StreamWriter(logPath, false, System.Text.Encoding.UTF8);
+        }
+        catch
+        {
+            result.LogPath = String.Empty;
+            return StreamWriter.Null;
+        }
+    }
+
+    private static void WriteLogLine(StreamWriter writer, string value)
+    {
+        if (writer == null || value == null)
+        {
+            return;
+        }
+        writer.WriteLine(value);
+        writer.Flush();
     }
 
     private static string BuildCmdCommand(string batchPath, string[] args)

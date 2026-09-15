@@ -11,7 +11,7 @@ Demo startup:
 1. Download or clone the Git project.
 2. Double-click `LinovaOneERP.exe`, or run `run.bat`.
 3. On first startup, `run.bat` automatically creates local configuration files from the templates when they are missing.
-4. If `target/linova-one-erp.jar` is missing, `run.bat` automatically builds it with Maven.
+4. If `target/linova-one-erp.jar` is missing, `run.bat` automatically builds it with Maven. The EXE shows a startup window while this is happening and writes a launcher log under `logs/YYYYMMDD/` if startup fails.
 5. Sign in with the local-only demo account.
 
 ```text
@@ -73,7 +73,7 @@ run.bat --init-db
 1. Git プロジェクトをダウンロード、または clone します。
 2. `LinovaOneERP.exe` をダブルクリックするか、`run.bat` を実行します。
 3. 初回起動時、ローカル設定ファイルが存在しない場合は、`run.bat` がテンプレートから自動作成します。
-4. `target/linova-one-erp.jar` が存在しない場合は、`run.bat` が Maven で自動ビルドします。
+4. `target/linova-one-erp.jar` が存在しない場合は、`run.bat` が Maven で自動ビルドします。この間、EXE は起動画面を表示し、起動失敗時は `logs/YYYYMMDD/` にランチャーログを書き込みます。
 5. ローカル専用のデモアカウントでログインします。
 
 ```text
@@ -135,7 +135,7 @@ run.bat --init-db
 1. 下载或 clone Git 项目。
 2. 双击 `LinovaOneERP.exe`，或执行 `run.bat`。
 3. 首次启动时，如果本地配置文件不存在，`run.bat` 会自动从模板创建。
-4. 如果 `target/linova-one-erp.jar` 不存在，`run.bat` 会自动使用 Maven 构建。
+4. 如果 `target/linova-one-erp.jar` 不存在，`run.bat` 会自动使用 Maven 构建。EXE 会在此期间显示启动提示窗口；如果启动失败，会在 `logs/YYYYMMDD/` 下写入 launcher 日志。
 5. 使用仅限本地演示的账号登录。
 
 ```text

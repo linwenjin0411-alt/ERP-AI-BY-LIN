@@ -53,9 +53,9 @@ Silent desktop startup:
 Double-click LinovaOneERP.exe
 ```
 
-Daily desktop use should start from `LinovaOneERP.exe`. It launches `run.bat` in the background without opening a command window.
+Daily desktop use should start from `LinovaOneERP.exe`. It launches `run.bat` in the background without opening a command window and shows a small startup window while the app is being prepared.
 
-When `LinovaOneERP.exe` is opened, the launcher starts the existing `target/linova-one-erp.jar` with `javaw`. It does not run Maven during daily startup.
+When `LinovaOneERP.exe` is opened, the launcher starts `run.bat`. If `target/linova-one-erp.jar` is missing after a fresh clone, `run.bat` builds it with Maven first; this can take a few minutes on the first run. If startup fails before the app window opens, the launcher shows an error and writes a startup log under `logs/YYYYMMDD/`.
 
 Maintenance command-line startup:
 

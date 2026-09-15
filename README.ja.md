@@ -53,9 +53,9 @@ JDK 8 以上と Apache Maven 3.8 以上をインストールしてください�
 Double-click LinovaOneERP.exe
 ```
 
-日常利用では `LinovaOneERP.exe` から起動してください。バックグラウンドで `run.bat` を起動し、コマンドウィンドウは表示されません。
+日常利用では `LinovaOneERP.exe` から起動してください。バックグラウンドで `run.bat` を起動し、コマンドウィンドウは表示されません。アプリを準備している間は小さな起動画面を表示します。
 
-`LinovaOneERP.exe` を開くと、ランチャーは既存の `target/linova-one-erp.jar` を `javaw` で起動します。日常起動時に Maven は実行されません。
+`LinovaOneERP.exe` を開くと、ランチャーは `run.bat` を起動します。fresh clone 後に `target/linova-one-erp.jar` が存在しない場合、`run.bat` が Maven で先にビルドします。初回起動には数分かかる場合があります。アプリ画面が開く前に起動に失敗した場合、ランチャーはエラーを表示し、`logs/YYYYMMDD/` に起動ログを書き込みます。
 
 メンテナンス用コマンドライン起動：
 
