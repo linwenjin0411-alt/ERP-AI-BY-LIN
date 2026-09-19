@@ -13,6 +13,7 @@ import com.lin.erp.logging.AppLogger;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -64,6 +65,7 @@ public class BusinessFunctionPanel extends JPanel {
     private DefaultTableModel tableModel;
     private TableRowSorter<DefaultTableModel> tableSorter;
     private JTextField filterField;
+    private JComboBox<String> statusFilter;
     private JLabel countLabel;
     private JLabel totalLabel;
     private JLabel openLabel;
@@ -122,6 +124,25 @@ public class BusinessFunctionPanel extends JPanel {
             }
         });
         actions.add(filterField);
+        statusFilter = new JComboBox<String>(new String[]{"", "status.open", "status.released", "status.ready", "status.posted", "status.cancelled"});
+        statusFilter.setPreferredSize(new Dimension(150, 34));
+        statusFilter.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+                                                                  boolean isSelected, boolean cellHasFocus) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                String text = value == null ? "" : value.toString();
+                label.setText(text.length() == 0 ? "All status" : BusinessFunctionPanel.this.text(text));
+                return label;
+            }
+        });
+        statusFilter.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyFilter();
+            }
+        });
+        actions.add(statusFilter);
         actions.add(createActionButton("action.new", "action.new"));
         actions.add(createActionButton("action.edit", "action.edit"));
         actions.add(createActionButton("action.delete", "action.delete"));
@@ -208,7 +229,7 @@ public class BusinessFunctionPanel extends JPanel {
             }
         });
         JTableHeader header = table.getTableHeader();
-        header.setReorderingAllowed(false);
+        header.setReorderingAllowed(true);
         header.setBackground(new Color(248, 250, 252));
         header.setForeground(AppTheme.TEXT_MUTED);
         header.setFont(AppTheme.font(Font.BOLD, 11));
@@ -365,6 +386,7 @@ public class BusinessFunctionPanel extends JPanel {
         }
 
         final FunctionRecord selectedRecord = selected;
+        final long[] savedId = new long[]{selectedRecord == null ? -1L : selectedRecord.getId()};
         BackgroundTasks.run(
                 owner,
                 "Function record save failed.",
@@ -376,7 +398,7 @@ public class BusinessFunctionPanel extends JPanel {
                         if (editMode) {
                             repository.updateRecord(selectedRecord.getId(), valuesForTable(formValues, currentStatusValue(formValues)));
                         } else {
-                            repository.createRecord(function.getCode(), valuesForTable(formValues, "status.open"));
+                            savedId[0] = repository.createRecord(function.getCode(), valuesForTable(formValues, "status.open"));
                         }
                         return null;
                     }
@@ -385,7 +407,7 @@ public class BusinessFunctionPanel extends JPanel {
                     @Override
                     public void accept(Void value) {
                         AppMessages.success(owner, editMode ? t("message.edit.success") : t("message.create.success"));
-                        reload();
+                        reload(savedId[0]);
                     }
                 }
         );
@@ -397,10 +419,10 @@ public class BusinessFunctionPanel extends JPanel {
             AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
             return;
         }
-        FunctionRecord record = records.get(row);
+        final FunctionRecord record = records.get(row);
         int result = JOptionPane.showConfirmDialog(
                 owner,
-                t("message.delete.confirm") + " " + displayRecordId(record) + " ?",
+                t("message.delete.confirm") + " " + deleteSummary(record) + " ?",
                 t("dialog.confirm.title"),
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.WARNING_MESSAGE
@@ -432,6 +454,10 @@ public class BusinessFunctionPanel extends JPanel {
     }
 
     private void reload() {
+        reload(selectedRecordId());
+    }
+
+    private void reload(final long preferredRecordId) {
         BackgroundTasks.run(
                 owner,
                 "Function record load failed.",
@@ -448,24 +474,23 @@ public class BusinessFunctionPanel extends JPanel {
                     public void accept(List<FunctionRecord> loaded) {
                         records.clear();
                         records.addAll(loaded);
-                        rebuildTable();
+                        rebuildTable(preferredRecordId);
                     }
                 }
         );
     }
 
-    private void rebuildTable() {
+    private void rebuildTable(long preferredRecordId) {
         String[][] rows = new String[records.size()][];
         for (int i = 0; i < records.size(); i++) {
             rows[i] = localized(recordValuesForDisplay(records.get(i)));
         }
         tableModel.setDataVector(rows, localized(definition.getTableColumnKeys()));
         tableSorter.setModel(tableModel);
+        TableColumnPreferences.install(table, "business." + function.getCode() + "." + session.getLanguage().name());
         applyFilter();
         countLabel.setText(t("item.count.prefix") + records.size());
-        if (records.size() > 0) {
-            table.setRowSelectionInterval(0, 0);
-        }
+        selectRecord(preferredRecordId);
         if (totalLabel != null) {
             totalLabel.setText(String.valueOf(records.size()));
             releasedLabel.setText(String.valueOf(countStatus("status.released")));
@@ -494,14 +519,20 @@ public class BusinessFunctionPanel extends JPanel {
         }
 
         File file = new File(exportDir, function.getCode().toLowerCase() + "-"
+                + safeFilterSuffix()
                 + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".csv");
         Writer writer = null;
         try {
             writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
             writer.write('\ufeff');
-            writeCsvLine(writer, localized(definition.getTableColumnKeys()));
-            for (FunctionRecord record : records) {
-                writeCsvLine(writer, localized(record.getValues()));
+            writeCsvLine(writer, visibleColumnHeaders());
+            for (int viewRow = 0; viewRow < table.getRowCount(); viewRow++) {
+                String[] row = new String[table.getColumnCount()];
+                for (int column = 0; column < table.getColumnCount(); column++) {
+                    Object value = table.getValueAt(viewRow, column);
+                    row[column] = value == null ? "" : value.toString();
+                }
+                writeCsvLine(writer, row);
             }
             AppMessages.success(owner, t("message.export.success") + file.getAbsolutePath());
         } catch (Exception e) {
@@ -531,11 +562,19 @@ public class BusinessFunctionPanel extends JPanel {
             return;
         }
         String filter = filterField.getText();
-        if (filter == null || filter.trim().length() == 0) {
+        String status = statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString();
+        List<RowFilter<Object, Object>> filters = new ArrayList<RowFilter<Object, Object>>();
+        if (filter != null && filter.trim().length() > 0) {
+            filters.add(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(filter.trim())));
+        }
+        if (status.length() > 0) {
+            filters.add(RowFilter.regexFilter("(?i)^" + java.util.regex.Pattern.quote(text(status)) + "$"));
+        }
+        if (filters.isEmpty()) {
             tableSorter.setRowFilter(null);
             return;
         }
-        tableSorter.setRowFilter(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(filter.trim())));
+        tableSorter.setRowFilter(RowFilter.andFilter(filters));
     }
 
     private String[] createDefaultFormValues() {
@@ -736,9 +775,64 @@ public class BusinessFunctionPanel extends JPanel {
         writer.write(System.lineSeparator());
     }
 
+    private String[] visibleColumnHeaders() {
+        String[] headers = new String[table.getColumnCount()];
+        for (int i = 0; i < table.getColumnCount(); i++) {
+            headers[i] = table.getColumnName(i);
+        }
+        return headers;
+    }
+
     private String displayRecordId(FunctionRecord record) {
         String[] values = record.getValues();
         return values.length == 0 || values[0] == null || values[0].trim().length() == 0 ? String.valueOf(record.getId()) : text(values[0]);
+    }
+
+    private String deleteSummary(FunctionRecord record) {
+        String[] values = recordValuesForDisplay(record);
+        StringBuilder summary = new StringBuilder(displayRecordId(record));
+        for (int i = 1; i < values.length && i < 4; i++) {
+            if (values[i] != null && values[i].trim().length() > 0) {
+                summary.append(" / ").append(text(values[i]));
+            }
+        }
+        return summary.toString();
+    }
+
+    private long selectedRecordId() {
+        int row = selectedRow();
+        return row < 0 || row >= records.size() ? -1L : records.get(row).getId();
+    }
+
+    private void selectRecord(long preferredRecordId) {
+        if (records.isEmpty()) {
+            return;
+        }
+        int modelRow = 0;
+        if (preferredRecordId > 0) {
+            for (int i = 0; i < records.size(); i++) {
+                if (records.get(i).getId() == preferredRecordId) {
+                    modelRow = i;
+                    break;
+                }
+            }
+        }
+        int viewRow = table.convertRowIndexToView(modelRow);
+        if (viewRow >= 0 && viewRow < table.getRowCount()) {
+            table.setRowSelectionInterval(viewRow, viewRow);
+        } else if (table.getRowCount() > 0) {
+            table.setRowSelectionInterval(0, 0);
+        }
+    }
+
+    private String safeFilterSuffix() {
+        String filter = filterField == null ? "" : filterField.getText();
+        String status = statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString();
+        String raw = (filter == null ? "" : filter.trim()) + (status.length() == 0 ? "" : "-" + status.replace("status.", ""));
+        if (raw.trim().length() == 0) {
+            return "";
+        }
+        return raw.replaceAll("[^A-Za-z0-9_-]+", "_") + "-";
     }
 
     private String defaultDocumentNumber() {
