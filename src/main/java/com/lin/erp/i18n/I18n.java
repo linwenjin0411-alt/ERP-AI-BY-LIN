@@ -93,6 +93,9 @@ public final class I18n {
         put("license.invalid", "The license key is invalid or expired.",
                 "许可证无效或已过期。",
                 "ライセンスキーが無効、または期限切れです。");
+        put("license.expiry.warning", "License expires in days: ",
+                "许可证剩余天数：",
+                "ライセンスの残日数：");
         put("license.register.success", "License registered. Valid until: ",
                 "许可证已登记，有效期至：",
                 "ライセンスを登録しました。有効期限：");
@@ -112,6 +115,20 @@ public final class I18n {
         put("license.field.validFrom", "Valid From", "有效开始日", "有効開始日");
         put("license.field.validUntil", "Valid Until", "有效截止日", "有効期限");
         put("license.action.register", "Register License", "登记许可证", "ライセンス登録");
+        put("license.action.revoke", "Revoke", "撤销", "取消");
+        put("license.revoke.confirm", "Revoke the active license and keep it in history?",
+                "是否撤销当前有效许可证并保留历史记录？",
+                "有効なライセンスを取り消し、履歴として保持しますか？");
+        put("license.revoke.success", "License revoked.", "许可证已撤销。", "ライセンスを取り消しました。");
+        put("license.revoke.failed", "License could not be revoked. See the app log for details.",
+                "许可证撤销失败，请查看应用日志。",
+                "ライセンスを取り消せません。アプリログを確認してください。");
+        put("license.field.customer", "Customer", "授权客户", "ライセンス顧客");
+        put("license.field.modules", "Modules", "授权模块", "許可モジュール");
+        put("license.field.seatPolicy", "Seat Policy", "席位策略", "シートポリシー");
+        put("license.field.remainingDays", "Remaining Days", "剩余天数", "残日数");
+        put("license.field.reason", "Reason", "原因", "理由");
+        put("license.field.deviceBinding", "Device Binding", "设备绑定", "端末バインド");
         put("license.status.valid", "Valid until: ", "有效期至：", "有効期限：");
         put("license.status.invalid", "No valid license", "没有有效许可证", "有効なライセンスがありません");
         put("dialog.confirm.title", "Confirm action", "确认操作", "操作確認");

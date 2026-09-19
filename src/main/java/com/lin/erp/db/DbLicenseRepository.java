@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +31,9 @@ public class DbLicenseRepository {
     private static final int DEFAULT_API_CACHE_DAYS = 30;
     private static final int MAX_API_RESPONSE_BYTES = 65536;
     private static final String PRODUCT_CODE = "LinovaOneERP";
+    private static final String SOURCE_DEMO = "demo";
+    private static final String SOURCE_DATABASE = "database";
+    private static final String SOURCE_ONLINE = "online";
 
     private final DbConfig config;
 
@@ -50,10 +54,14 @@ public class DbLicenseRepository {
         if (currentKey != null && currentKey.trim().length() > 0) {
             LicenseStatus verified = verifyConfiguredApi(databaseStatus.getLicenseKey(), userCode);
             if (verified.isValid()) {
-                if (!sameDate(databaseStatus.getValidUntil(), verified.getValidUntil())) {
-                    registerDatabaseLicense(databaseStatus.getLicenseKey(), verified.getValidUntil());
+                if (!sameDate(databaseStatus.getValidUntil(), verified.getValidUntil())
+                        || metadataChanged(databaseStatus, verified)) {
+                    refreshDatabaseLicense(databaseStatus.getLicenseKey(), verified);
                 }
-                return new LicenseStatus(true, databaseStatus.getLicenseKey(), verified.getValidUntil());
+                return status(true, databaseStatus.getLicenseKey(), verified.getValidUntil(),
+                        verified.getReasonCode(), verified.getDetailMessage(), verified.getCustomerName(),
+                        verified.getProductCode(), verified.getModules(), verified.getSeatPolicy(),
+                        verified.isDeviceBindingEnabled(), SOURCE_ONLINE);
             }
             return verified;
         }
@@ -68,19 +76,27 @@ public class DbLicenseRepository {
             connection = Database.connect(config);
             ensureSchema(connection);
             statement = connection.prepareStatement(
-                    "select license_key, valid_until from erp_licenses "
+                    "select license_key, valid_until, customer_name, product_code, modules, seat_policy, device_binding "
+                            + "from erp_licenses "
                             + "where active = 1 order by valid_until desc, id desc limit 1"
             );
             resultSet = statement.executeQuery();
             if (!resultSet.next()) {
-                return new LicenseStatus(false, null, null);
+                return status(false, null, null, "NO_LICENSE", "No active database license.", "", "", "", "", false, SOURCE_DATABASE);
             }
             Date date = resultSet.getDate("valid_until");
             if (date == null) {
-                return new LicenseStatus(false, resultSet.getString("license_key"), null);
+                return status(false, resultSet.getString("license_key"), null, "DB_DATE_INVALID",
+                        "Active database license has no valid_until date.", string(resultSet, "customer_name"),
+                        string(resultSet, "product_code"), string(resultSet, "modules"),
+                        string(resultSet, "seat_policy"), resultSet.getBoolean("device_binding"), SOURCE_DATABASE);
             }
             LocalDate validUntil = date.toLocalDate();
-            return new LicenseStatus(!validUntil.isBefore(LocalDate.now()), resultSet.getString("license_key"), validUntil);
+            boolean valid = !validUntil.isBefore(LocalDate.now());
+            return status(valid, resultSet.getString("license_key"), validUntil,
+                    valid ? "DB_ACTIVE" : "EXPIRED", valid ? "Active database license." : "Database license is expired.",
+                    string(resultSet, "customer_name"), string(resultSet, "product_code"), string(resultSet, "modules"),
+                    string(resultSet, "seat_policy"), resultSet.getBoolean("device_binding"), SOURCE_DATABASE);
         } finally {
             close(resultSet, statement, connection);
         }
@@ -94,7 +110,7 @@ public class DbLicenseRepository {
         if (!config.isEnabled()) {
             String normalized = licenseKey == null ? "" : licenseKey.trim();
             if (normalized.length() == 0) {
-                return new LicenseStatus(false, licenseKey, null);
+                return status(false, licenseKey, null, "EMPTY_KEY", "License key is required.", "", "", "", "", false, SOURCE_DEMO);
             }
             LocalDate validUntil = LocalDate.now().plusDays(loadLicenseApiConfig().getCacheDays());
             return registerLocalLicense(normalized, validUntil);
@@ -102,18 +118,22 @@ public class DbLicenseRepository {
 
         String normalized = licenseKey == null ? "" : licenseKey.trim();
         if (normalized.length() == 0) {
-            return new LicenseStatus(false, licenseKey, null);
+            return status(false, licenseKey, null, "EMPTY_KEY", "License key is required.", "", "", "", "", false, SOURCE_ONLINE);
         }
 
         LicenseStatus apiStatus = verifyConfiguredApi(normalized, userCode);
         if (apiStatus.isValid()) {
-            LocalDate validUntil = apiStatus.getValidUntil();
-            return registerDatabaseLicense(normalized, validUntil);
+            return registerDatabaseLicense(normalized, apiStatus, userCode);
         }
         return apiStatus;
     }
 
     private LicenseStatus registerDatabaseLicense(String licenseKey, LocalDate validUntil) throws SQLException {
+        return registerDatabaseLicense(licenseKey, status(true, licenseKey, validUntil, "ONLINE_VALID",
+                "License accepted by online API.", "", PRODUCT_CODE, "", "", false, SOURCE_ONLINE), "");
+    }
+
+    private LicenseStatus registerDatabaseLicense(String licenseKey, LicenseStatus apiStatus, String userCode) throws SQLException {
         Connection connection = null;
         PreparedStatement deactivate = null;
         PreparedStatement insert = null;
@@ -123,22 +143,34 @@ public class DbLicenseRepository {
             ensureSchema(connection);
             originalAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
-            deactivate = connection.prepareStatement("update erp_licenses set active = 0, updated_by = ? where active = 1");
-            deactivate.setString(1, auditUser());
+            deactivate = connection.prepareStatement(
+                    "update erp_licenses set active = 0, revoked_at = current_timestamp, updated_by = ? where active = 1"
+            );
+            deactivate.setString(1, auditUser(userCode));
             deactivate.executeUpdate();
             insert = connection.prepareStatement(
-                    "insert into erp_licenses (license_key, valid_from, valid_until, active, created_by, updated_by, source_machine) "
-                            + "values (?, ?, ?, 1, ?, ?, ?)"
+                    "insert into erp_licenses (license_key, valid_from, valid_until, active, created_by, updated_by, "
+                            + "source_machine, customer_name, product_code, modules, seat_policy, device_binding, "
+                            + "last_verified_at, verify_source) values (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp, ?)"
             );
             insert.setString(1, licenseKey.trim());
             insert.setDate(2, Date.valueOf(LocalDate.now()));
-            insert.setDate(3, Date.valueOf(validUntil));
-            insert.setString(4, auditUser());
-            insert.setString(5, auditUser());
+            insert.setDate(3, Date.valueOf(apiStatus.getValidUntil()));
+            insert.setString(4, auditUser(userCode));
+            insert.setString(5, auditUser(userCode));
             insert.setString(6, localMachineName());
+            insert.setString(7, emptyToNull(apiStatus.getCustomerName()));
+            insert.setString(8, emptyToNull(apiStatus.getProductCode()));
+            insert.setString(9, emptyToNull(apiStatus.getModules()));
+            insert.setString(10, emptyToNull(apiStatus.getSeatPolicy()));
+            insert.setBoolean(11, apiStatus.isDeviceBindingEnabled());
+            insert.setString(12, SOURCE_ONLINE);
             insert.executeUpdate();
             connection.commit();
-            return new LicenseStatus(true, licenseKey, validUntil);
+            return status(true, licenseKey, apiStatus.getValidUntil(), apiStatus.getReasonCode(),
+                    apiStatus.getDetailMessage(), apiStatus.getCustomerName(), apiStatus.getProductCode(),
+                    apiStatus.getModules(), apiStatus.getSeatPolicy(), apiStatus.isDeviceBindingEnabled(),
+                    SOURCE_DATABASE);
         } catch (SQLException e) {
             if (connection != null) {
                 try {
@@ -166,17 +198,73 @@ public class DbLicenseRepository {
         }
     }
 
+    private void refreshDatabaseLicense(String licenseKey, LicenseStatus apiStatus) throws SQLException {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        try {
+            connection = Database.connect(config);
+            ensureSchema(connection);
+            statement = connection.prepareStatement(
+                    "update erp_licenses set valid_until = ?, customer_name = ?, product_code = ?, modules = ?, "
+                            + "seat_policy = ?, device_binding = ?, last_verified_at = current_timestamp, "
+                            + "verify_source = ?, updated_by = ? where active = 1 and license_key = ?"
+            );
+            statement.setDate(1, Date.valueOf(apiStatus.getValidUntil()));
+            statement.setString(2, emptyToNull(apiStatus.getCustomerName()));
+            statement.setString(3, emptyToNull(apiStatus.getProductCode()));
+            statement.setString(4, emptyToNull(apiStatus.getModules()));
+            statement.setString(5, emptyToNull(apiStatus.getSeatPolicy()));
+            statement.setBoolean(6, apiStatus.isDeviceBindingEnabled());
+            statement.setString(7, SOURCE_ONLINE);
+            statement.setString(8, auditUser());
+            statement.setString(9, licenseKey);
+            statement.executeUpdate();
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+
+    public void revokeCurrentLicense(String userCode) throws SQLException {
+        if (!config.isEnabled()) {
+            return;
+        }
+        Connection connection = null;
+        PreparedStatement statement = null;
+        try {
+            connection = Database.connect(config);
+            ensureSchema(connection);
+            statement = connection.prepareStatement(
+                    "update erp_licenses set active = 0, revoked_at = current_timestamp, updated_by = ? where active = 1"
+            );
+            statement.setString(1, auditUser(userCode));
+            statement.executeUpdate();
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+
     private LicenseStatus verifyConfiguredApi(String licenseKey, String userCode) throws SQLException {
         LicenseApiConfig apiConfig = loadLicenseApiConfig();
         if (!apiConfig.isConfigured()) {
-            return new LicenseStatus(false, licenseKey, null);
+            return status(false, licenseKey, null, "CONFIG_MISSING",
+                    "Formal license API is not configured.", "", "", "", "", false, SOURCE_ONLINE);
         }
         if (licenseKey == null || licenseKey.trim().length() == 0) {
-            return new LicenseStatus(false, licenseKey, null);
+            return status(false, licenseKey, null, "EMPTY_KEY", "License key is required.", "", "", "", "", false, SOURCE_ONLINE);
         }
         HttpURLConnection connection = null;
         try {
-            URL url = new URL(apiConfig.getVerifyApiUrl(licenseKey, userCode));
+            URL url = new URL(apiConfig.getVerifyApiUrl(licenseKey, userCode, localMachineName()));
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(apiConfig.getTimeoutMs());
@@ -186,13 +274,17 @@ public class DbLicenseRepository {
             if (statusCode == HttpURLConnection.HTTP_OK) {
                 ApiLicenseResponse response = responseLicense(connection, licenseKey);
                 if (response.valid) {
-                    return new LicenseStatus(true, licenseKey, response.validUntil);
+                    return response.toStatus(licenseKey, SOURCE_ONLINE);
                 }
-                return new LicenseStatus(false, licenseKey, response.validUntil);
+                return response.toStatus(licenseKey, SOURCE_ONLINE);
             }
-            return new LicenseStatus(false, licenseKey, null);
+            return status(false, licenseKey, null, httpReason(statusCode),
+                    "License API rejected the request with HTTP " + statusCode + ".", "", "", "", "", false,
+                    SOURCE_ONLINE);
+        } catch (SocketTimeoutException e) {
+            return status(false, licenseKey, null, "NETWORK_TIMEOUT", e.getMessage(), "", "", "", "", false, SOURCE_ONLINE);
         } catch (IOException e) {
-            return new LicenseStatus(false, licenseKey, null);
+            return status(false, licenseKey, null, "NETWORK_ERROR", e.getMessage(), "", "", "", "", false, SOURCE_ONLINE);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -205,28 +297,30 @@ public class DbLicenseRepository {
             byte[] bytes = readAll(connection.getInputStream());
             String body = new String(bytes, StandardCharsets.UTF_8);
             if (!jsonBoolean(body, "ok")) {
-                return ApiLicenseResponse.invalid(null);
+                return ApiLicenseResponse.invalid(null, apiReason(body, "BUSINESS_REJECTED"), jsonString(body, "message"));
             }
             String product = jsonString(body, "product_code");
             if (product != null && !PRODUCT_CODE.equals(product.trim())) {
-                return ApiLicenseResponse.invalid(null);
+                return ApiLicenseResponse.invalid(null, "PRODUCT_MISMATCH", "License is for a different product.");
             }
             String responseKey = jsonString(body, "license_key");
             if (responseKey != null && responseKey.trim().length() > 0
                     && !responseKey.trim().equals(licenseKey.trim())) {
-                return ApiLicenseResponse.invalid(null);
+                return ApiLicenseResponse.invalid(null, "RESPONSE_MISMATCH", "License API returned a different key.");
             }
             String expiresAt = jsonString(body, "expires_at");
             if (expiresAt == null) {
-                return ApiLicenseResponse.invalid(null);
+                return ApiLicenseResponse.invalid(null, "RESPONSE_INVALID", "License API response has no expiry date.");
             }
             LocalDate validUntil = LocalDate.parse(expiresAt.trim());
             if (validUntil.isBefore(LocalDate.now())) {
-                return ApiLicenseResponse.invalid(validUntil);
+                return ApiLicenseResponse.invalid(validUntil, "EXPIRED", "License is expired.");
             }
-            return ApiLicenseResponse.valid(validUntil);
+            return ApiLicenseResponse.valid(validUntil, product, jsonString(body, "customer_name"),
+                    jsonString(body, "customer"), jsonArrayOrString(body, "modules"), jsonString(body, "seat_policy"),
+                    jsonString(body, "seatPolicy"), jsonBoolean(body, "device_binding"));
         } catch (Exception ignored) {
-            return ApiLicenseResponse.invalid(null);
+            return ApiLicenseResponse.invalid(null, "RESPONSE_INVALID", "License API response could not be parsed.");
         }
     }
 
@@ -250,7 +344,7 @@ public class DbLicenseRepository {
     private LicenseStatus currentLocalStatus() throws SQLException {
         File file = localLicenseFile();
         if (!file.isFile()) {
-            return new LicenseStatus(false, null, null);
+            return status(false, null, null, "NO_DEMO_CACHE", "No local demo license cache.", "", "", "", "", false, SOURCE_DEMO);
         }
         Properties properties = new Properties();
         FileInputStream input = null;
@@ -264,10 +358,14 @@ public class DbLicenseRepository {
                     validUntil = LocalDate.now().plusDays(parseInt(properties.getProperty("license.cacheDays"), DEFAULT_API_CACHE_DAYS));
                 }
                 boolean valid = key != null && key.trim().length() > 0 && !validUntil.isBefore(LocalDate.now());
-                return new LicenseStatus(valid, key, validUntil);
+                return status(valid, key, validUntil, valid ? "DEMO_CACHE_VALID" : "DEMO_CACHE_EXPIRED",
+                        valid ? "Local demo license cache is valid." : "Local demo license cache is expired.",
+                        "Demo", PRODUCT_CODE, "Demo", "Demo", false, SOURCE_DEMO);
             }
             LicenseKeyVerifier.Result verification = LicenseKeyVerifier.verify(key, false);
-            return new LicenseStatus(verification.isValid(), key, verification.getValidUntil());
+            return status(verification.isValid(), key, verification.getValidUntil(),
+                    verification.isValid() ? "SIGNATURE_VALID" : "SIGNATURE_INVALID",
+                    "Offline signature compatibility check.", "", PRODUCT_CODE, "", "", false, SOURCE_DEMO);
         } catch (IOException e) {
             throw new SQLException("Failed to read config/license.properties: " + e.getMessage(), e);
         } finally {
@@ -311,7 +409,8 @@ public class DbLicenseRepository {
         try {
             output = new FileOutputStream(file);
             properties.store(output, "Linova One ERP local license");
-            return new LicenseStatus(true, licenseKey, validUntil);
+            return status(true, licenseKey, validUntil, "DEMO_REGISTERED", "Local demo license cache was registered.",
+                    "Demo", PRODUCT_CODE, "Demo", "Demo", false, SOURCE_DEMO);
         } catch (IOException e) {
             throw new SQLException("Failed to write config/license.properties: " + e.getMessage(), e);
         } finally {
@@ -356,6 +455,14 @@ public class DbLicenseRepository {
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "created_by", "created_by varchar(80)");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "updated_by", "updated_by varchar(80)");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "source_machine", "source_machine varchar(160)");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "customer_name", "customer_name varchar(160)");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "product_code", "product_code varchar(80)");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "modules", "modules varchar(500)");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "seat_policy", "seat_policy varchar(160)");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "device_binding", "device_binding tinyint(1) not null default 0");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "last_verified_at", "last_verified_at timestamp null");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "verify_source", "verify_source varchar(40)");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "revoked_at", "revoked_at timestamp null");
     }
 
     private void widenLicenseKey(Connection connection) throws SQLException {
@@ -391,7 +498,8 @@ public class DbLicenseRepository {
             return new LicenseApiConfig(
                     properties.getProperty("license.verifyApiUrl", "").trim(),
                     parseInt(properties.getProperty("license.cacheDays"), DEFAULT_API_CACHE_DAYS),
-                    parseInt(properties.getProperty("license.timeoutMs"), DEFAULT_API_TIMEOUT_MS)
+                    parseInt(properties.getProperty("license.timeoutMs"), DEFAULT_API_TIMEOUT_MS),
+                    Boolean.parseBoolean(properties.getProperty("license.deviceBinding.enabled", "false"))
             );
         } catch (IOException e) {
             throw new SQLException("Failed to read config/license.properties: " + e.getMessage(), e);
@@ -460,22 +568,24 @@ public class DbLicenseRepository {
         private final String verifyApiUrl;
         private final int cacheDays;
         private final int timeoutMs;
+        private final boolean deviceBindingEnabled;
 
-        private LicenseApiConfig(String verifyApiUrl, int cacheDays, int timeoutMs) {
+        private LicenseApiConfig(String verifyApiUrl, int cacheDays, int timeoutMs, boolean deviceBindingEnabled) {
             this.verifyApiUrl = verifyApiUrl;
             this.cacheDays = cacheDays <= 0 ? DEFAULT_API_CACHE_DAYS : cacheDays;
             this.timeoutMs = timeoutMs <= 0 ? DEFAULT_API_TIMEOUT_MS : timeoutMs;
+            this.deviceBindingEnabled = deviceBindingEnabled;
         }
 
         private static LicenseApiConfig empty() {
-            return new LicenseApiConfig("", DEFAULT_API_CACHE_DAYS, DEFAULT_API_TIMEOUT_MS);
+            return new LicenseApiConfig("", DEFAULT_API_CACHE_DAYS, DEFAULT_API_TIMEOUT_MS, false);
         }
 
         private boolean isConfigured() {
             return verifyApiUrl.length() > 0;
         }
 
-        private String getVerifyApiUrl(String licenseKey, String userCode) throws IOException {
+        private String getVerifyApiUrl(String licenseKey, String userCode, String machineCode) throws IOException {
             String url = verifyApiUrl.replace("{license_key}", urlEncode(licenseKey))
                     .replace("{license}", urlEncode(licenseKey));
             try {
@@ -486,6 +596,9 @@ public class DbLicenseRepository {
                 String user = userCode == null ? "" : userCode.trim();
                 if (user.length() > 0) {
                     params.put("user_code", user);
+                }
+                if (deviceBindingEnabled) {
+                    params.put("machine_code", machineCode == null ? "" : machineCode.trim());
                 }
                 URI base = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, uri.getFragment());
                 return appendEncodedQuery(base.toASCIIString(), buildQuery(params));
@@ -551,6 +664,18 @@ public class DbLicenseRepository {
         return left.equals(right);
     }
 
+    private static boolean metadataChanged(LicenseStatus left, LicenseStatus right) {
+        return !sameText(left.getCustomerName(), right.getCustomerName())
+                || !sameText(left.getProductCode(), right.getProductCode())
+                || !sameText(left.getModules(), right.getModules())
+                || !sameText(left.getSeatPolicy(), right.getSeatPolicy())
+                || left.isDeviceBindingEnabled() != right.isDeviceBindingEnabled();
+    }
+
+    private static boolean sameText(String left, String right) {
+        return value(left).equals(value(right));
+    }
+
     private static boolean jsonBoolean(String body, String name) {
         Matcher matcher = Pattern.compile("\"" + Pattern.quote(name) + "\"\\s*:\\s*(true|false)").matcher(body);
         return matcher.find() && "true".equals(matcher.group(1));
@@ -561,11 +686,47 @@ public class DbLicenseRepository {
         return matcher.find() ? unescapeJson(matcher.group(1)) : null;
     }
 
+    private static String jsonArrayOrString(String body, String name) {
+        String value = jsonString(body, name);
+        if (value != null) {
+            return value;
+        }
+        Matcher matcher = Pattern.compile("\"" + Pattern.quote(name) + "\"\\s*:\\s*\\[([^\\]]*)\\]").matcher(body);
+        if (!matcher.find()) {
+            return "";
+        }
+        String raw = matcher.group(1);
+        Matcher item = Pattern.compile("\"([^\"]*)\"").matcher(raw);
+        StringBuilder builder = new StringBuilder();
+        while (item.find()) {
+            if (builder.length() > 0) {
+                builder.append(", ");
+            }
+            builder.append(unescapeJson(item.group(1)));
+        }
+        return builder.toString();
+    }
+
+    private static String apiReason(String body, String fallback) {
+        String code = jsonString(body, "error_code");
+        if (code == null || code.trim().length() == 0) {
+            code = jsonString(body, "reason_code");
+        }
+        return code == null || code.trim().length() == 0 ? fallback : code.trim().toUpperCase(Locale.ROOT);
+    }
+
     private static String unescapeJson(String value) {
         return value.replace("\\\"", "\"").replace("\\\\", "\\");
     }
 
     private static String auditUser() {
+        return auditUser("");
+    }
+
+    private static String auditUser(String userCode) {
+        if (userCode != null && userCode.trim().length() > 0) {
+            return userCode.trim();
+        }
         String value = System.getProperty("user.name", "system");
         return value == null || value.trim().length() == 0 ? "system" : value.trim();
     }
@@ -594,21 +755,80 @@ public class DbLicenseRepository {
         }
     }
 
+    private static String string(ResultSet resultSet, String name) throws SQLException {
+        String value = resultSet.getString(name);
+        return value == null ? "" : value;
+    }
+
+    private static String emptyToNull(String value) {
+        return value == null || value.trim().length() == 0 ? null : value.trim();
+    }
+
+    private static String value(String text) {
+        return text == null ? "" : text.trim();
+    }
+
+    private static String httpReason(int statusCode) {
+        if (statusCode == HttpURLConnection.HTTP_FORBIDDEN) {
+            return "BUSINESS_REJECTED";
+        }
+        if (statusCode == HttpURLConnection.HTTP_CONFLICT) {
+            return "OVER_SEAT";
+        }
+        if (statusCode == 422) {
+            return "EXPIRED";
+        }
+        return "HTTP_" + statusCode;
+    }
+
+    private static LicenseStatus status(boolean valid, String licenseKey, LocalDate validUntil, String reasonCode,
+            String detailMessage, String customerName, String productCode, String modules, String seatPolicy,
+            boolean deviceBindingEnabled, String source) {
+        return new LicenseStatus(valid, licenseKey, validUntil, reasonCode, detailMessage, customerName,
+                productCode, modules, seatPolicy, deviceBindingEnabled, source);
+    }
+
     private static final class ApiLicenseResponse {
         private final boolean valid;
         private final LocalDate validUntil;
+        private final String reasonCode;
+        private final String detailMessage;
+        private final String productCode;
+        private final String customerName;
+        private final String modules;
+        private final String seatPolicy;
+        private final boolean deviceBindingEnabled;
 
-        private ApiLicenseResponse(boolean valid, LocalDate validUntil) {
+        private ApiLicenseResponse(boolean valid, LocalDate validUntil, String reasonCode, String detailMessage,
+                String productCode, String customerName, String modules, String seatPolicy, boolean deviceBindingEnabled) {
             this.valid = valid;
             this.validUntil = validUntil;
+            this.reasonCode = value(reasonCode);
+            this.detailMessage = value(detailMessage);
+            this.productCode = value(productCode);
+            this.customerName = value(customerName);
+            this.modules = value(modules);
+            this.seatPolicy = value(seatPolicy);
+            this.deviceBindingEnabled = deviceBindingEnabled;
         }
 
-        private static ApiLicenseResponse valid(LocalDate validUntil) {
-            return new ApiLicenseResponse(true, validUntil);
+        private static ApiLicenseResponse valid(LocalDate validUntil, String productCode, String customerName,
+                String fallbackCustomerName, String modules, String seatPolicy, String fallbackSeatPolicy,
+                boolean deviceBindingEnabled) {
+            String actualCustomer = customerName == null || customerName.trim().length() == 0 ? fallbackCustomerName : customerName;
+            String actualSeatPolicy = seatPolicy == null || seatPolicy.trim().length() == 0 ? fallbackSeatPolicy : seatPolicy;
+            return new ApiLicenseResponse(true, validUntil, "ONLINE_VALID", "License accepted by online API.",
+                    productCode == null || productCode.trim().length() == 0 ? PRODUCT_CODE : productCode,
+                    actualCustomer, modules, actualSeatPolicy, deviceBindingEnabled);
         }
 
-        private static ApiLicenseResponse invalid(LocalDate validUntil) {
-            return new ApiLicenseResponse(false, validUntil);
+        private static ApiLicenseResponse invalid(LocalDate validUntil, String reasonCode, String detailMessage) {
+            return new ApiLicenseResponse(false, validUntil, reasonCode, detailMessage, "", "", "", "", false);
+        }
+
+        private LicenseStatus toStatus(String licenseKey, String source) {
+            return status(valid, licenseKey, validUntil, reasonCode, detailMessage, customerName, productCode,
+                    modules, seatPolicy, deviceBindingEnabled, source);
         }
     }
 }

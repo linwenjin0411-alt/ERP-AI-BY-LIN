@@ -43,9 +43,10 @@ Configure the formal license API in `config/license.properties`:
 license.verifyApiUrl=https://your-license-server.example/api.php?action=verify
 license.cacheDays=30
 license.timeoutMs=5000
+license.deviceBinding.enabled=false
 ```
 
-The application appends `product_code=LinovaOneERP`, `user_code`, and the entered `license_key` automatically.
+The application appends `product_code=LinovaOneERP`, `user_code`, and the entered `license_key` automatically. `machine_code` is sent only when device binding is enabled.
 
 For MySQL startup, edit `config/db.properties`:
 
@@ -105,9 +106,10 @@ db.enabled=true
 license.verifyApiUrl=https://your-license-server.example/api.php?action=verify
 license.cacheDays=30
 license.timeoutMs=5000
+license.deviceBinding.enabled=false
 ```
 
-アプリケーションは `product_code=LinovaOneERP`、`user_code`、入力された `license_key` を自動的に追加します。
+アプリケーションは `product_code=LinovaOneERP`、`user_code`、入力された `license_key` を自動的に追加します。端末バインドが有効な場合のみ `machine_code` を送信します。
 
 MySQL で起動する場合は、`config/db.properties` を編集します。
 
@@ -167,9 +169,10 @@ db.enabled=true
 license.verifyApiUrl=https://your-license-server.example/api.php?action=verify
 license.cacheDays=30
 license.timeoutMs=5000
+license.deviceBinding.enabled=false
 ```
 
-程序会自动追加 `product_code=LinovaOneERP`、`user_code` 和用户输入的 `license_key`。
+程序会自动追加 `product_code=LinovaOneERP`、`user_code` 和用户输入的 `license_key`。只有启用设备绑定策略时才发送 `machine_code`。
 
 使用 MySQL 时，编辑 `config/db.properties`：
 

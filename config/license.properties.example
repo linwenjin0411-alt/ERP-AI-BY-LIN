@@ -1,3 +1,4 @@
 license.verifyApiUrl=https://your-license-server.example/api.php?action=verify
 license.cacheDays=30
 license.timeoutMs=5000
+license.deviceBinding.enabled=false
