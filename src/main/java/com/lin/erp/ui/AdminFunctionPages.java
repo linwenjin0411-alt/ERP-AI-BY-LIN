@@ -5,19 +5,19 @@ import com.lin.erp.db.MenuNode;
 
 import java.awt.Window;
 
-class UserManagementPanel extends BusinessFunctionPanel {
+class UserManagementPanel extends AdminSecurityPanel {
     UserManagementPanel(Window owner, UserSession session, MenuNode function) {
         super(owner, session, function);
     }
 }
 
-class RoleManagementPanel extends BusinessFunctionPanel {
+class RoleManagementPanel extends AdminSecurityPanel {
     RoleManagementPanel(Window owner, UserSession session, MenuNode function) {
         super(owner, session, function);
     }
 }
 
-class PermissionManagementPanel extends BusinessFunctionPanel {
+class PermissionManagementPanel extends AdminSecurityPanel {
     PermissionManagementPanel(Window owner, UserSession session, MenuNode function) {
         super(owner, session, function);
     }

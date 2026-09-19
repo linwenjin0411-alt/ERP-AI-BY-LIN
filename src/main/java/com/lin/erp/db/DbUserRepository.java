@@ -7,8 +7,12 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 
 public class DbUserRepository {
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCK_MINUTES = 15;
+
     private final DbConfig config;
 
     public DbUserRepository(DbConfig config) {
@@ -22,8 +26,10 @@ public class DbUserRepository {
         ResultSet resultSet = null;
         try {
             connection = Database.connect(config);
+            ensureSecurityColumns(connection);
             statement = connection.prepareStatement(
-                    "select u.username, u.password_hash, u.display_name, r.code as role_code, r.name as role_name, c.name as company_name "
+                    "select u.username, u.password_hash, u.display_name, r.code as role_code, r.name as role_name, c.name as company_name, "
+                            + "u.failed_login_count, u.locked_until "
                             + "from erp_users u "
                             + "join erp_roles r on r.id = u.role_id "
                             + "join erp_companies c on c.id = u.company_id "
@@ -42,7 +48,9 @@ public class DbUserRepository {
                     resultSet.getString("display_name"),
                     resultSet.getString("role_code"),
                     resultSet.getString("role_name"),
-                    resultSet.getString("company_name")
+                    resultSet.getString("company_name"),
+                    resultSet.getInt("failed_login_count"),
+                    resultSet.getTimestamp("locked_until")
             );
         } finally {
             if (resultSet != null) {
@@ -62,7 +70,11 @@ public class DbUserRepository {
         PreparedStatement statement = null;
         try {
             connection = Database.connect(config);
-            statement = connection.prepareStatement("update erp_users set last_login_at = current_timestamp where lower(username) = lower(?)");
+            ensureSecurityColumns(connection);
+            statement = connection.prepareStatement(
+                    "update erp_users set last_login_at = current_timestamp, failed_login_count = 0, locked_until = null "
+                            + "where lower(username) = lower(?)"
+            );
             statement.setString(1, username);
             statement.executeUpdate();
         } finally {
@@ -73,6 +85,38 @@ public class DbUserRepository {
                 connection.close();
             }
         }
+    }
+
+    public void recordFailedLogin(String username) throws SQLException {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        try {
+            connection = Database.connect(config);
+            ensureSecurityColumns(connection);
+            statement = connection.prepareStatement(
+                    "update erp_users set failed_login_count = failed_login_count + 1, "
+                            + "locked_until = case when failed_login_count + 1 >= ? then timestampadd(minute, ?, current_timestamp) else locked_until end "
+                            + "where lower(username) = lower(?) and active = 1"
+            );
+            statement.setInt(1, MAX_FAILED_ATTEMPTS);
+            statement.setInt(2, LOCK_MINUTES);
+            statement.setString(3, username);
+            statement.executeUpdate();
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
+    }
+
+    private void ensureSecurityColumns(Connection connection) throws SQLException {
+        DatabaseSchema.ensureColumn(connection, "erp_users", "failed_login_count", "failed_login_count int not null default 0");
+        DatabaseSchema.ensureColumn(connection, "erp_users", "locked_until", "locked_until timestamp null");
+        DatabaseSchema.ensureColumn(connection, "erp_users", "password_changed_at", "password_changed_at timestamp null");
+        DatabaseSchema.ensureColumn(connection, "erp_users", "password_expires_at", "password_expires_at timestamp null");
     }
 
     public int countUsers() throws SQLException {
@@ -156,14 +200,19 @@ public class DbUserRepository {
         private final String roleCode;
         private final String roleName;
         private final String companyName;
+        private final int failedLoginCount;
+        private final Timestamp lockedUntil;
 
-        public DbAccount(String username, String passwordHash, String displayName, String roleCode, String roleName, String companyName) {
+        public DbAccount(String username, String passwordHash, String displayName, String roleCode, String roleName,
+                         String companyName, int failedLoginCount, Timestamp lockedUntil) {
             this.username = username;
             this.passwordHash = passwordHash;
             this.displayName = displayName;
             this.roleCode = roleCode;
             this.roleName = roleName;
             this.companyName = companyName;
+            this.failedLoginCount = failedLoginCount;
+            this.lockedUntil = lockedUntil;
         }
 
         public String getUsername() {
@@ -188,6 +237,18 @@ public class DbUserRepository {
 
         public String getCompanyName() {
             return companyName;
+        }
+
+        public int getFailedLoginCount() {
+            return failedLoginCount;
+        }
+
+        public boolean isLocked() {
+            return lockedUntil != null && lockedUntil.after(new Timestamp(System.currentTimeMillis()));
+        }
+
+        public Timestamp getLockedUntil() {
+            return lockedUntil;
         }
     }
 }

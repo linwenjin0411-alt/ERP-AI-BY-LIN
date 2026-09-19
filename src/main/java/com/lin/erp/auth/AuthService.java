@@ -60,9 +60,18 @@ public class AuthService {
             if (account == null) {
                 throw new AuthException(I18n.t(language, "auth.user.notFound"));
             }
+            if (account.isLocked()) {
+                AppLogger.warning("Database user is locked until " + account.getLockedUntil() + ": " + normalizedUsername);
+                throw new AuthException(I18n.t(language, "auth.bad.credentials"));
+            }
 
             String candidateHash = hashPasswordHex(new String(password));
             if (!candidateHash.equalsIgnoreCase(account.getPasswordHash())) {
+                try {
+                    dbUserRepository.recordFailedLogin(account.getUsername());
+                } catch (SQLException e) {
+                    AppLogger.error("Failed to update failed login counter.", e);
+                }
                 throw new AuthException(I18n.t(language, "auth.bad.credentials"));
             }
 
