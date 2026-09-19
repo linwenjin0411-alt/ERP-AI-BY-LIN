@@ -1474,67 +1474,9 @@ public class MainFrame extends JFrame {
     }
 
     private void runStatusAction(String actionKey) {
-        if (!hasEditableTable()) {
-            logUserAction("WORKFLOW_ACTION_BLOCKED", "action=" + actionKey + " | reason=noEditableTable");
-            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
-            return;
-        }
-        int modelRow = selectedModelRow();
-        if (modelRow < 0) {
-            logUserAction("WORKFLOW_ACTION_BLOCKED", "action=" + actionKey + " | reason=noSelectedRow");
-            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
-            return;
-        }
-
-        int statusColumnIndex = findColumnIndex(currentModule, "column.status");
-        if (statusColumnIndex < 0) {
-            logUserAction("WORKFLOW_ACTION_BLOCKED", "action=" + actionKey + " | reason=noStatusColumn");
-            AppMessages.error(this, t("message.error.title"), t("message.no.status"));
-            return;
-        }
-
-        String targetStatus = targetStatusFor(actionKey);
-        if (!confirmStatusAction(actionKey, modelRow, targetStatus)) {
-            logUserAction("WORKFLOW_ACTION_CANCEL", "action=" + actionKey
-                    + " | row=" + modelRow
-                    + " | record=" + selectedRecordName(modelRow)
-                    + " | targetStatus=" + english(targetStatus));
-            return;
-        }
-
-        final ModulePageData targetModule = currentModule;
-        final int targetRow = modelRow;
-        BackgroundTasks.run(
-                this,
-                "Status update failed.",
-                t("message.error.title"),
-                t("message.status.failed"),
-                new BackgroundTasks.Work<List<ModulePageData>>() {
-                    @Override
-                    public List<ModulePageData> run() throws Exception {
-                        int sortOrder = targetModule.getTableRowSortOrders().get(targetRow).intValue();
-                        logUserAction("WORKFLOW_ACTION_SUBMIT", "action=" + actionKey
-                                + " | sortOrder=" + sortOrder
-                                + " | record=" + selectedRecordName(targetRow)
-                                + " | targetStatus=" + english(targetStatus));
-                        moduleRepository.updateTableRowStatus(targetModule.getCode(), sortOrder, statusColumnIndex, targetStatus);
-                        AppLogger.info("Updated ERP row status. Module: " + targetModule.getCode()
-                                + ", sortOrder: " + sortOrder + ", status: " + targetStatus);
-                        return moduleRepository.loadModules();
-                    }
-                },
-                new BackgroundTasks.Success<List<ModulePageData>>() {
-                    @Override
-                    public void accept(List<ModulePageData> reloaded) {
-                        applyReloadedModules(targetModule.getCode(), reloaded);
-                        refreshTexts();
-                        logUserAction("WORKFLOW_ACTION_SUCCESS", "action=" + actionKey
-                                + " | row=" + targetRow
-                                + " | targetStatus=" + english(targetStatus));
-                        AppMessages.success(MainFrame.this, successMessageFor(actionKey));
-                    }
-                }
-        );
+        logUserAction("WORKFLOW_ACTION_BLOCKED", "action=" + actionKey + " | reason=moduleProjectionOnly");
+        AppMessages.error(this, t("message.error.title"),
+                "This dashboard row is a projection. Open the matching business function to release, approve, or post with inventory, finance, and audit checks.");
     }
 
     private void exportCurrentTable() {

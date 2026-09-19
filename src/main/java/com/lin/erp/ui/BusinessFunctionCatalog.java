@@ -34,7 +34,7 @@ public final class BusinessFunctionCatalog {
 
     private static void add(String code, String[] fields, String[] values, String[] columns, String[][] rows,
                             String flow, String upstream, String downstream) {
-        DEFINITIONS.put(code, new BusinessFunctionDefinition(fields, values, columns, rows, flow, upstream, downstream,
+        DEFINITIONS.put(code, new BusinessFunctionDefinition(fields, values, persistenceKeys(code, fields), columns, rows, flow, upstream, downstream,
                 numberingRule(code), "LINOVA / JP01 / FY2026-08", isReadOnlyPage(code)));
     }
 
@@ -42,7 +42,58 @@ public final class BusinessFunctionCatalog {
         return code != null && (code.endsWith("_QUERY")
                 || code.startsWith("REPORT_")
                 || code.startsWith("AI_")
-                || "INVENTORY_LEDGER".equals(code));
+                || "INVENTORY_LEDGER".equals(code)
+                || "INVENTORY_STOCK".equals(code)
+                || "INVENTORY_LOT".equals(code)
+                || "MANUFACTURING_MRP".equals(code)
+                || "MANUFACTURING_COST".equals(code)
+                || "FINANCE_AR".equals(code)
+                || "FINANCE_AP".equals(code)
+                || "FINANCE_GL".equals(code)
+                || "FINANCE_CLOSE".equals(code)
+                || "ADMIN_AUDIT".equals(code));
+    }
+
+    private static String[] persistenceKeys(String code, String[] fields) {
+        if (code == null) {
+            return fields;
+        }
+        if (code.startsWith("PROCUREMENT_")) {
+            return new String[]{
+                    "function.field.documentNo", "function.field.status", "function.field.item",
+                    "function.field.quantity", "function.field.partner", "function.field.businessDate",
+                    "column.next", "function.field.memo"
+            };
+        }
+        if (code.startsWith("SALES_")) {
+            return new String[]{
+                    "function.field.documentNo", "function.field.partner", "function.field.quantity",
+                    "function.field.status", "function.field.businessDate", "column.next",
+                    "function.field.memo", "function.field.item"
+            };
+        }
+        if (code.startsWith("MANUFACTURING_")) {
+            return new String[]{
+                    "function.field.documentNo", "function.field.item", "function.field.quantity",
+                    "function.field.status", "function.field.businessDate", "column.risk",
+                    "column.next", "function.field.memo"
+            };
+        }
+        if (code.startsWith("INVENTORY_")) {
+            return new String[]{
+                    "function.field.item", "function.field.warehouse", "function.field.quantity",
+                    "function.field.status", "column.risk", "column.next", "function.field.documentNo",
+                    "function.field.memo"
+            };
+        }
+        if (code.startsWith("FINANCE_")) {
+            return new String[]{
+                    "function.field.documentNo", "function.field.partner", "function.field.quantity",
+                    "function.field.status", "function.field.businessDate", "column.next",
+                    "function.field.memo", "function.field.item"
+            };
+        }
+        return fields;
     }
 
     private static String numberingRule(String code) {

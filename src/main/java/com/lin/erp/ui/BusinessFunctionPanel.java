@@ -457,7 +457,7 @@ public class BusinessFunctionPanel extends JPanel {
     private void rebuildTable() {
         String[][] rows = new String[records.size()][];
         for (int i = 0; i < records.size(); i++) {
-            rows[i] = localized(records.get(i).getValues());
+            rows[i] = localized(recordValuesForDisplay(records.get(i)));
         }
         tableModel.setDataVector(rows, localized(definition.getTableColumnKeys()));
         tableSorter.setModel(tableModel);
@@ -552,7 +552,7 @@ public class BusinessFunctionPanel extends JPanel {
 
     private String[] recordValuesForForm(FunctionRecord record) {
         String[] formValues = createDefaultFormValues();
-        String[] columns = definition.getTableColumnKeys();
+        String[] columns = definition.getPersistenceKeys();
         String[] values = record.getValues();
         for (int i = 0; i < columns.length && i < values.length; i++) {
             int index = fieldIndexForColumn(columns[i]);
@@ -563,8 +563,24 @@ public class BusinessFunctionPanel extends JPanel {
         return formValues;
     }
 
-    private String[] valuesForTable(String[] formValues, String status) {
+    private String[] recordValuesForDisplay(FunctionRecord record) {
         String[] columns = definition.getTableColumnKeys();
+        String[] values = record.getValues();
+        String[] persistenceKeys = definition.getPersistenceKeys();
+        String[] display = new String[columns.length];
+        for (int i = 0; i < columns.length; i++) {
+            int sourceIndex = persistenceIndexForColumn(columns[i], persistenceKeys);
+            if (sourceIndex >= 0 && sourceIndex < values.length) {
+                display[i] = values[sourceIndex];
+            } else {
+                display[i] = "";
+            }
+        }
+        return display;
+    }
+
+    private String[] valuesForTable(String[] formValues, String status) {
+        String[] columns = definition.getPersistenceKeys();
         String[] values = new String[Math.min(8, columns.length)];
         for (int i = 0; i < values.length; i++) {
             values[i] = valueForColumn(columns[i], formValues, i, status);
@@ -577,7 +593,7 @@ public class BusinessFunctionPanel extends JPanel {
             String line = formValue(formValues, 0);
             return line.matches("\\d+") ? line : String.valueOf(records.size() + 1);
         }
-        if ("column.status".equals(columnKey)) {
+        if ("column.status".equals(columnKey) || "function.field.status".equals(columnKey)) {
             return status;
         }
         if ("column.next".equals(columnKey)) {
@@ -593,10 +609,19 @@ public class BusinessFunctionPanel extends JPanel {
         return index < formValues.length ? formValue(formValues, index) : "";
     }
 
+    private int persistenceIndexForColumn(String columnKey, String[] persistenceKeys) {
+        for (int i = 0; i < persistenceKeys.length; i++) {
+            if (columnMatches(columnKey, persistenceKeys[i])) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private int fieldIndexForColumn(String columnKey) {
         String[] fieldKeys = definition.getFieldKeys();
         for (int i = 0; i < fieldKeys.length; i++) {
-            if (columnKey.equals(fieldKeys[i])) {
+            if (columnMatches(columnKey, fieldKeys[i])) {
                 return i;
             }
         }
@@ -632,6 +657,46 @@ public class BusinessFunctionPanel extends JPanel {
             return Math.min(1, fieldKeys.length - 1);
         }
         return -1;
+    }
+
+    private boolean columnMatches(String columnKey, String fieldKey) {
+        if (columnKey == null || fieldKey == null) {
+            return false;
+        }
+        if (columnKey.equals(fieldKey)) {
+            return true;
+        }
+        if ("column.id".equals(columnKey)) {
+            return "function.field.documentNo".equals(fieldKey) || "license.field.key".equals(fieldKey);
+        }
+        if ("column.date".equals(columnKey) || "column.due".equals(columnKey)) {
+            return "function.field.businessDate".equals(fieldKey) || "license.field.validFrom".equals(fieldKey);
+        }
+        if ("column.status".equals(columnKey)) {
+            return "function.field.status".equals(fieldKey);
+        }
+        if ("column.item".equals(columnKey)) {
+            return "function.field.item".equals(fieldKey);
+        }
+        if ("column.qty".equals(columnKey) || "column.amount".equals(columnKey)
+                || "column.demand".equals(columnKey) || "column.stock".equals(columnKey)
+                || "column.ordered".equals(columnKey) || "column.wip".equals(columnKey)
+                || "column.netDemand".equals(columnKey)) {
+            return "function.field.quantity".equals(fieldKey);
+        }
+        if ("column.customer".equals(columnKey) || "column.supplier".equals(columnKey)) {
+            return "function.field.partner".equals(fieldKey);
+        }
+        if ("column.warehouse".equals(columnKey) || "column.plant".equals(columnKey)) {
+            return "function.field.warehouse".equals(fieldKey);
+        }
+        if ("column.owner".equals(columnKey)) {
+            return "function.field.owner".equals(fieldKey);
+        }
+        if ("column.next".equals(columnKey)) {
+            return "function.field.memo".equals(fieldKey);
+        }
+        return false;
     }
 
     private String currentStatusValue(String[] formValues) {

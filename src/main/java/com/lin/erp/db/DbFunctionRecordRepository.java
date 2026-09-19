@@ -222,9 +222,11 @@ public class DbFunctionRecordRepository {
         ResultSet keys = null;
         try {
             connection = Database.connect(config);
+            connection.setAutoCommit(false);
             ensureSchema(connection);
             statement = connection.prepareStatement(mapping.insertSql(), PreparedStatement.RETURN_GENERATED_KEYS);
             statement.setString(1, mapping.documentType);
+            validateNewStatus(mapping.statusValue(values));
             bindBusiness(statement, 2, mapping, values);
             statement.executeUpdate();
             keys = statement.getGeneratedKeys();
@@ -232,8 +234,10 @@ public class DbFunctionRecordRepository {
             if (generatedId > 0) {
                 syncInventoryMovement(connection, mapping, generatedId, values, true);
                 recordOperationLog(connection, mapping.functionCode, generatedId, "CREATE", "SUCCESS", "Business record created.");
+                connection.commit();
                 return mapping.encodeId(generatedId);
             }
+            connection.rollback();
             return -1;
         } finally {
             if (keys != null) {
@@ -251,13 +255,17 @@ public class DbFunctionRecordRepository {
         PreparedStatement statement = null;
         try {
             connection = Database.connect(config);
+            connection.setAutoCommit(false);
             ensureSchema(connection);
+            String currentStatus = loadCurrentStatus(connection, mapping, mapping.decodeId(encodedId));
+            validateStatusEdit(currentStatus, mapping.statusValue(values));
             statement = connection.prepareStatement(mapping.updateSql());
             bindBusiness(statement, 1, mapping, values);
             statement.setLong(9, mapping.decodeId(encodedId));
             statement.executeUpdate();
             syncInventoryMovement(connection, mapping, mapping.decodeId(encodedId), values, true);
             recordOperationLog(connection, mapping.functionCode, mapping.decodeId(encodedId), "UPDATE", "SUCCESS", "Business record updated.");
+            connection.commit();
         } finally {
             close(null, statement, connection);
         }
@@ -271,15 +279,68 @@ public class DbFunctionRecordRepository {
         PreparedStatement statement = null;
         try {
             connection = Database.connect(config);
+            connection.setAutoCommit(false);
             ensureSchema(connection);
+            String currentStatus = loadCurrentStatus(connection, mapping, mapping.decodeId(encodedId));
+            if (isPostedOrClosed(currentStatus)) {
+                throw new SQLException("Posted or closed business records cannot be deleted. Use a reversal document.");
+            }
             statement = connection.prepareStatement("update " + mapping.tableName + " set active = 0 where id = ?");
             statement.setLong(1, mapping.decodeId(encodedId));
             statement.executeUpdate();
             syncInventoryMovement(connection, mapping, mapping.decodeId(encodedId), null, false);
             recordOperationLog(connection, mapping.functionCode, mapping.decodeId(encodedId), "DELETE", "SUCCESS", "Business record deactivated.");
+            connection.commit();
         } finally {
             close(null, statement, connection);
         }
+    }
+
+    private String loadCurrentStatus(Connection connection, BusinessRecordMapping mapping, long id) throws SQLException {
+        if (mapping.statusColumn() == null) {
+            return null;
+        }
+        PreparedStatement statement = null;
+        ResultSet resultSet = null;
+        try {
+            statement = connection.prepareStatement("select " + mapping.statusColumn() + " from " + mapping.tableName + " where id = ? and active = 1");
+            statement.setLong(1, id);
+            resultSet = statement.executeQuery();
+            return resultSet.next() ? resultSet.getString(1) : null;
+        } finally {
+            if (resultSet != null) {
+                resultSet.close();
+            }
+            if (statement != null) {
+                statement.close();
+            }
+        }
+    }
+
+    private void validateNewStatus(String status) throws SQLException {
+        if ("status.posted".equals(status) || "status.closed".equals(status) || "status.cancelled".equals(status)) {
+            throw new SQLException("New business records must start as draft, open, waiting approval, ready, or released.");
+        }
+    }
+
+    private void validateStatusEdit(String currentStatus, String newStatus) throws SQLException {
+        if (newStatus == null || newStatus.trim().length() == 0 || currentStatus == null || currentStatus.trim().length() == 0) {
+            return;
+        }
+        if (isPostedOrClosed(currentStatus) && !currentStatus.equals(newStatus)) {
+            throw new SQLException("Posted or closed business records cannot be changed by normal edit.");
+        }
+        if (("status.posted".equals(newStatus) || "status.closed".equals(newStatus))
+                && !("status.released".equals(currentStatus) || "status.posted".equals(currentStatus))) {
+            throw new SQLException("Use the controlled release/post/close workflow instead of editing status directly.");
+        }
+        if ("status.cancelled".equals(newStatus) && "status.posted".equals(currentStatus)) {
+            throw new SQLException("Posted records cannot be cancelled directly. Use a reversal document.");
+        }
+    }
+
+    private boolean isPostedOrClosed(String status) {
+        return "status.posted".equals(status) || "status.closed".equals(status);
     }
 
     private void seedBusinessIfEmpty(Connection connection, BusinessRecordMapping mapping, String[][] seedRows) throws SQLException {
@@ -843,6 +904,22 @@ public class DbFunctionRecordRepository {
         return null;
     }
 
+    private boolean isReadOnlyFunction(String functionCode) {
+        return functionCode != null && (functionCode.endsWith("_QUERY")
+                || functionCode.startsWith("REPORT_")
+                || functionCode.startsWith("AI_")
+                || "INVENTORY_LEDGER".equals(functionCode)
+                || "INVENTORY_STOCK".equals(functionCode)
+                || "INVENTORY_LOT".equals(functionCode)
+                || "MANUFACTURING_MRP".equals(functionCode)
+                || "MANUFACTURING_COST".equals(functionCode)
+                || "FINANCE_AR".equals(functionCode)
+                || "FINANCE_AP".equals(functionCode)
+                || "FINANCE_GL".equals(functionCode)
+                || "FINANCE_CLOSE".equals(functionCode)
+                || "ADMIN_AUDIT".equals(functionCode));
+    }
+
     private BusinessRecordMapping mappingForPrefix(int prefix) {
         String[] codes = {
                 null,
@@ -868,7 +945,8 @@ public class DbFunctionRecordRepository {
                         BusinessColumn.date("due_date"),
                         BusinessColumn.text("next_action"),
                         BusinessColumn.text("memo")
-                });
+                },
+                isReadOnlyFunction(functionCode));
     }
 
     private BusinessRecordMapping salesMapping(String functionCode, String documentType, int prefix) {
@@ -882,7 +960,8 @@ public class DbFunctionRecordRepository {
                         BusinessColumn.text("next_action"),
                         BusinessColumn.text("memo"),
                         BusinessColumn.text("external_ref")
-                });
+                },
+                isReadOnlyFunction(functionCode));
     }
 
     private BusinessRecordMapping manufacturingMapping(String functionCode, String documentType, int prefix) {
@@ -896,7 +975,8 @@ public class DbFunctionRecordRepository {
                         BusinessColumn.status("risk_code"),
                         BusinessColumn.text("next_action"),
                         BusinessColumn.text("bom_code")
-                });
+                },
+                isReadOnlyFunction(functionCode));
     }
 
     private BusinessRecordMapping inventoryMapping(String functionCode, String documentType, int prefix) {
@@ -910,7 +990,8 @@ public class DbFunctionRecordRepository {
                         BusinessColumn.text("next_action"),
                         BusinessColumn.text("lot_no"),
                         BusinessColumn.text("memo")
-                });
+                },
+                isReadOnlyFunction(functionCode));
     }
 
     private void bindBusiness(PreparedStatement statement, int startIndex, BusinessRecordMapping mapping, String[] values) throws SQLException {
@@ -1167,6 +1248,26 @@ public class DbFunctionRecordRepository {
                     || "STOCK_BALANCE".equals(documentType)
                     || "STOCK_TRANSFER".equals(documentType)
                     || "CYCLE_COUNT".equals(documentType);
+        }
+
+        private String statusColumn() {
+            for (int i = 0; i < valueColumns.length; i++) {
+                if (BusinessColumn.STATUS.equals(valueColumns[i].type)
+                        && "status".equals(valueColumns[i].name)) {
+                    return valueColumns[i].name;
+                }
+            }
+            return null;
+        }
+
+        private String statusValue(String[] values) {
+            for (int i = 0; i < valueColumns.length; i++) {
+                if (BusinessColumn.STATUS.equals(valueColumns[i].type)
+                        && "status".equals(valueColumns[i].name)) {
+                    return value(values, i);
+                }
+            }
+            return null;
         }
 
         private String value(String[] values, int index) {
