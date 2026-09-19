@@ -14,7 +14,6 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -398,14 +397,14 @@ public class ItemMasterPanel extends JPanel {
         }
 
         ItemMasterRecord record = records.get(row);
-        int result = JOptionPane.showConfirmDialog(
+        boolean confirmed = AppMessages.confirm(
                 this,
-                t("message.delete.confirm") + " " + record.getItemCode() + " / " + record.getItemName() + " / " + I18n.textOrValue(session.getLanguage(), record.getStatus()) + " ?",
                 t("dialog.confirm.title"),
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.WARNING_MESSAGE
+                t("message.delete.confirm") + " " + record.getItemCode() + " / " + record.getItemName() + " / " + I18n.textOrValue(session.getLanguage(), record.getStatus()) + " ?",
+                t("dialog.confirm.ok"),
+                t("dialog.confirm.cancel")
         );
-        if (result != JOptionPane.OK_OPTION) {
+        if (!confirmed) {
             logAction("ITEM_DELETE_CANCEL", "itemCode=" + record.getItemCode());
             return;
         }

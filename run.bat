@@ -57,6 +57,17 @@ if not exist "%APP_JAR%" (
 )
 
 if "%NEED_BUILD%"=="1" (
+  if /i "%~1"=="--compile-only" (
+    if exist "scripts\check-encoding.ps1" (
+      powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\check-encoding.ps1"
+      if errorlevel 1 (
+        echo.
+        echo [ERROR] Encoding check failed.
+        exit /b 1
+      )
+    )
+  )
+
   where mvn >nul 2>nul
   if errorlevel 1 (
     echo [ERROR] Apache Maven was not found.

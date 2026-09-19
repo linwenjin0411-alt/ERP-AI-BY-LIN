@@ -268,7 +268,7 @@ public class AiAssistantPanel extends JPanel {
                 },
                 cols(),
                 new LocalText[][]{
-                        row("Inventory + MRP", "库存 + MRP", "在庫 + MRP", "Shortage risk by item", "按品目查询缺料风险", "品目別欠品リスク", "RM-1008 shortage affects MO-2608-004", "RM-1008 缺料影响 MO-2608-004", "RM-1008 の欠品が MO-2608-004 に影響"),
+                        row("Inventory + MRP", "库存 + MRP", "在庫 + MRP", "Shortage risk by item", "按物料查询缺料风险", "品目別欠品リスク", "RM-1008 shortage affects MO-2608-004", "RM-1008 缺料影响 MO-2608-004", "RM-1008 の欠品が MO-2608-004 に影響"),
                         row("Purchase orders", "采购订单", "購買発注", "Late inbound impact", "延期到货影响", "遅延入荷の影響", "PO-45000127 is late by 2 days", "PO-45000127 延期 2 天", "PO-45000127 は 2 日遅延"),
                         row("Sales + shipment", "销售 + 出货", "販売 + 出荷", "Delivery risk", "交付风险", "納期リスク", "SO-2608-104 needs stock confirmation", "SO-2608-104 需要库存确认", "SO-2608-104 は在庫確認が必要")
                 },
@@ -321,7 +321,7 @@ public class AiAssistantPanel extends JPanel {
                 tr("Management summary sample", "管理层摘要示例", "経営サマリー例"),
                 new AiCard[]{
                         card(tr("KPI snapshot", "关键指标", "KPI"), tr("Sales backlog: 16 orders. Material shortage risks: 5 items. Late purchase orders: 2. AR open balance: $318,400.",
-                                "销售待交付：16 单。缺料风险：5 个品目。延期采购订单：2 单。应收未清：$318,400。",
+                                "销售待交付：16 单。缺料风险：5 个物料。延期采购订单：2 单。应收未清：$318,400。",
                                 "販売未出荷：16 件。欠品リスク：5 品目。遅延購買発注：2 件。未回収売掛：$318,400。"), AppTheme.ACCENT),
                         card(tr("Risk summary", "风险摘要", "リスク要約"), tr("The main risk is RM-1008 shortage affecting production and shipment commitments. Finance should watch AR collection for large customers.",
                                 "主要风险是 RM-1008 缺料影响生产和出货承诺。财务需关注大客户应收回款。",
@@ -333,7 +333,7 @@ public class AiAssistantPanel extends JPanel {
                 cols(),
                 new LocalText[][]{
                         row("Sales report", "销售报表", "販売レポート", "Shipment backlog", "出货积压", "出荷滞留", "16 orders need delivery review", "16 单需要交付复核", "16 件は納期確認が必要"),
-                        row("Inventory report", "库存报表", "在庫レポート", "Shortage risk", "缺料风险", "欠品リスク", "5 items below planning threshold", "5 个品目低于计划阈值", "5 品目が計画しきい値未満"),
+                        row("Inventory report", "库存报表", "在庫レポート", "Shortage risk", "缺料风险", "欠品リスク", "5 items below planning threshold", "5 个物料低于计划阈值", "5 品目が計画しきい値未満"),
                         row("Finance report", "财务报表", "財務レポート", "AR/AP focus", "应收应付关注", "売掛/買掛確認", "AR collection and AP cash timing need review", "需复核应收回款和应付现金节奏", "売掛回収と買掛支払時期を確認")
                 },
                 AppTheme.SUCCESS

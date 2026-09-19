@@ -1,9 +1,17 @@
 package com.lin.erp.i18n;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 
 public final class I18n {
     public static final String APP_NAME = "Linova One ERP";
@@ -82,7 +90,10 @@ public final class I18n {
         put("message.permission.denied", "You do not have permission to perform this action.",
                 "您没有权限执行此操作。",
                 "この操作を実行する権限がありません。");
-        put("message.item.required", "Item code and item name are required.", "品目编号和品目名称为必填项。", "品目コードと品目名は必須です。");
+        put("message.readonly.page", "This page is read-only. Use filter, sort, refresh, or export.",
+                "当前页面为只读。请使用筛选、排序、刷新或导出。",
+                "この画面は参照専用です。フィルター、並べ替え、更新、エクスポートを使用してください。");
+        put("message.item.required", "Item code and item name are required.", "物料编号和物料名称为必填项。", "品目コードと品目名は必須です。");
         put("license.prompt.title", "License required", "需要许可证", "ライセンスが必要です");
         put("license.prompt.message", "Enter a signed license key. Format: LINOVA-yyyyMMdd-signature.",
                 "请输入签名许可证。格式：LINOVA-yyyyMMdd-signature。",
@@ -167,7 +178,7 @@ public final class I18n {
         put("function.field.businessDate", "Business Date", "业务日期", "業務日付");
         put("function.field.status", "Status", "状态", "ステータス");
         put("function.field.partner", "Partner", "业务伙伴", "取引先");
-        put("function.field.item", "Item", "品目", "品目");
+        put("function.field.item", "Item", "物料", "品目");
         put("function.field.quantity", "Quantity", "数量", "数量");
         put("function.field.warehouse", "Warehouse", "仓库", "倉庫");
         put("function.field.owner", "Owner", "负责人", "担当者");
@@ -177,8 +188,8 @@ public final class I18n {
         put("function.context.upstream", "Upstream", "上游", "上流");
         put("function.context.downstream", "Downstream", "下游", "下流");
         put("item.count.prefix", "Records: ", "记录数：", "件数: ");
-        put("item.side.title", "Item signals", "品目信号", "品目シグナル");
-        put("item.side.total", "Total items", "全部品目", "全品目");
+        put("item.side.title", "Item signals", "物料信号", "品目シグナル");
+        put("item.side.total", "Total items", "全部物料", "全品目");
         put("item.side.released", "Released", "已发布", "リリース済み");
         put("item.side.open", "Open", "打开", "未処理");
 
@@ -284,7 +295,7 @@ public final class I18n {
         put("menu.section.users", "Users", "用户", "ユーザー");
         put("menu.section.roles", "Roles", "角色", "ロール");
         put("menu.section.audit", "Audit", "审计", "監査");
-        put("menu.master.item", "Item Master Management", "品目主数据管理", "品目マスタ管理");
+        put("menu.master.item", "Item Master Management", "物料主数据管理", "品目マスタ管理");
         put("menu.master.bom", "BOM Management", "BOM 管理", "BOM管理");
         put("menu.master.customer", "Customer Master Management", "客户主数据管理", "得意先マスタ管理");
         put("menu.master.supplier", "Supplier Master Management", "供应商主数据管理", "仕入先マスタ管理");
@@ -424,9 +435,9 @@ public final class I18n {
         put("column.warehouse", "Warehouse", "仓库", "倉庫");
         put("column.risk", "Risk", "风险", "リスク");
         put("column.next", "Next step", "下一步", "次の処理");
-        put("column.itemCode", "Item Code", "品目编号", "品目コード");
-        put("column.itemName", "Item Name", "品目名称", "品目名");
-        put("column.itemType", "Item Type", "品目类型", "品目タイプ");
+        put("column.itemCode", "Item Code", "物料编号", "品目コード");
+        put("column.itemName", "Item Name", "物料名称", "品目名");
+        put("column.itemType", "Item Type", "物料类型", "品目タイプ");
         put("column.uom", "UoM", "单位", "単位");
         put("column.safetyStock", "Safety Stock", "安全库存", "安全在庫");
         put("column.leadTime", "Lead Time Days", "提前期天数", "リードタイム日数");
@@ -605,6 +616,7 @@ public final class I18n {
         put("ai.answer", "Sample insight: RM-1008 and PK-2210 require purchase follow-up. MO-2608-004 should be replanned if PO-45000127 is not received by Aug 20.",
                 "示例洞察：RM-1008 与 PK-2210 需要跟进采购；如果 PO-45000127 在 8 月 20 日前未收货，MO-2608-004 需要重排。",
                 "サンプル洞察：RM-1008 と PK-2210 は購買フォローが必要です。PO-45000127 が 8月20日 までに入荷しない場合、MO-2608-004 の再計画が必要です。");
+        loadResourceOverrides();
     }
 
     private I18n() {
@@ -648,9 +660,63 @@ public final class I18n {
         return Locale.ENGLISH;
     }
 
+    public static String formatDate(Language language, LocalDate date) {
+        if (date == null) {
+            return "";
+        }
+        if (language == Language.ZH) {
+            return date.format(DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.SIMPLIFIED_CHINESE));
+        }
+        if (language == Language.JA) {
+            return date.format(DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.JAPANESE));
+        }
+        return date.format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH));
+    }
+
+    public static String formatNumber(Language language, String value) {
+        if (value == null || value.trim().length() == 0) {
+            return "";
+        }
+        try {
+            BigDecimal decimal = new BigDecimal(value.replace(",", "").trim());
+            NumberFormat format = NumberFormat.getNumberInstance(locale(language));
+            return format.format(decimal);
+        } catch (NumberFormatException e) {
+            return value;
+        }
+    }
+
     private static void put(String key, String en, String zh, String ja) {
         TEXTS.get(Language.EN).put(key, en);
         TEXTS.get(Language.ZH).put(key, zh);
         TEXTS.get(Language.JA).put(key, ja);
+    }
+
+    private static void loadResourceOverrides() {
+        loadResourceOverrides(Language.EN, "/i18n/messages_en.properties");
+        loadResourceOverrides(Language.ZH, "/i18n/messages_zh_CN.properties");
+        loadResourceOverrides(Language.JA, "/i18n/messages_ja.properties");
+    }
+
+    private static void loadResourceOverrides(Language language, String path) {
+        InputStream input = I18n.class.getResourceAsStream(path);
+        if (input == null) {
+            return;
+        }
+        try {
+            Properties properties = new Properties();
+            properties.load(new BufferedReader(new InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8)));
+            for (String key : properties.stringPropertyNames()) {
+                TEXTS.get(language).put(key, properties.getProperty(key));
+            }
+        } catch (Exception ignored) {
+            // Keep the built-in text if an optional resource file cannot be read.
+        } finally {
+            try {
+                input.close();
+            } catch (Exception ignored) {
+                // Nothing else to close.
+            }
+        }
     }
 }

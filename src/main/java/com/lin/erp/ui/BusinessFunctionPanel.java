@@ -15,7 +15,6 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -329,7 +328,7 @@ public class BusinessFunctionPanel extends JPanel {
         if (permission.allows(actionKey)) {
             if (definition.isReadOnly()
                     && ("action.new".equals(actionKey) || "action.edit".equals(actionKey) || "action.delete".equals(actionKey))) {
-                AppMessages.error(owner, t("message.error.title"), "This page is read-only. Use filter, sort, refresh, or export.");
+                AppMessages.error(owner, t("message.error.title"), t("message.readonly.page"));
                 return false;
             }
             return true;
@@ -420,14 +419,14 @@ public class BusinessFunctionPanel extends JPanel {
             return;
         }
         final FunctionRecord record = records.get(row);
-        int result = JOptionPane.showConfirmDialog(
+        boolean confirmed = AppMessages.confirm(
                 owner,
-                t("message.delete.confirm") + " " + deleteSummary(record) + " ?",
                 t("dialog.confirm.title"),
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.WARNING_MESSAGE
+                t("message.delete.confirm") + " " + deleteSummary(record) + " ?",
+                t("dialog.confirm.ok"),
+                t("dialog.confirm.cancel")
         );
-        if (result != JOptionPane.OK_OPTION) {
+        if (!confirmed) {
             return;
         }
 

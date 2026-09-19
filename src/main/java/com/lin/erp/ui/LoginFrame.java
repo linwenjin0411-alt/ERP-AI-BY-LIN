@@ -479,7 +479,7 @@ public class LoginFrame extends JFrame {
                         AppLogger.userAction("LICENSE_REGISTER_SUCCESS", "username=" + session.getUsername()
                                 + " | validUntil=" + registered.getValidUntil());
                         AppMessages.success(LoginFrame.this, I18n.t(language, "license.register.success")
-                                + registered.getValidUntil());
+                                + I18n.formatDate(language, registered.getValidUntil()));
                         loadWorkspace(session);
                     } else {
                         AppMessages.error(LoginFrame.this, I18n.t(language, "message.error.title"),

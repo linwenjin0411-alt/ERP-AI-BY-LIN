@@ -180,7 +180,7 @@ class LicenseManagementPanel extends JPanel {
                 new BackgroundTasks.Success<LicenseStatus>() {
                     @Override
                     public void accept(LicenseStatus status) {
-                        String validUntil = status.getValidUntil() == null ? "" : status.getValidUntil().toString();
+                        String validUntil = I18n.formatDate(session.getLanguage(), status.getValidUntil());
                         statusLabel.setText(status.isValid()
                                 ? statusMark(true) + " " + t("license.status.valid") + validUntil
                                 : statusMark(false) + " " + t("license.status.invalid"));
@@ -224,7 +224,8 @@ class LicenseManagementPanel extends JPanel {
                             AppMessages.error(owner, t("message.error.title"), t("license.invalid") + detailSuffix(status));
                             return;
                         }
-                        AppMessages.success(owner, t("license.register.success") + status.getValidUntil());
+                        AppMessages.success(owner, t("license.register.success")
+                                + I18n.formatDate(session.getLanguage(), status.getValidUntil()));
                         reload();
                     }
                 }

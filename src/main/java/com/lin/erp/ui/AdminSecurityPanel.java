@@ -12,7 +12,6 @@ import com.lin.erp.logging.AppLogger;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -229,14 +228,14 @@ class AdminSecurityPanel extends JPanel {
             AppMessages.error(this, t("message.error.title"), t("message.select.row"));
             return;
         }
-        int result = JOptionPane.showConfirmDialog(
+        boolean confirmed = AppMessages.confirm(
                 this,
-                t("message.delete.confirm") + " " + values[0] + " / " + values[1] + " ?",
                 t("dialog.confirm.title"),
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.WARNING_MESSAGE
+                t("message.delete.confirm") + " " + values[0] + " / " + values[1] + " ?",
+                t("dialog.confirm.ok"),
+                t("dialog.confirm.cancel")
         );
-        if (result != JOptionPane.OK_OPTION) {
+        if (!confirmed) {
             return;
         }
         BackgroundTasks.run(

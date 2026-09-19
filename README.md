@@ -122,6 +122,14 @@ Main navigation uses an mcframe-style three-level layout: dark root module menu,
 
 Business pages use a unified mcframe-style work screen: toolbar actions, searchable and sortable tables, side context, document numbering rule, organization/period context, and CSV export. Query, report, AI, and inventory ledger pages are read-only by design.
 
+## Internationalization
+
+The application ships English, Simplified Chinese, and Japanese text. Built-in text remains in `I18n.java` for compatibility, and high-frequency labels can be overridden from UTF-8 resource files under `src/main/resources/i18n/messages_*.properties`.
+
+The language selected at sign-in is attached to the user session. Windows opened after sign-in use that session language; already opened desktop windows do not hot-swap language and should be reopened after a language change. CSV exports use localized table headers and localized display values from the current session.
+
+Delivery screenshots and PPT material should use one agreed language per package. Avoid mixing English, Simplified Chinese, and Japanese in the same customer-facing screenshot set unless the purpose is explicitly to demonstrate language switching.
+
 ## License
 
 After a user ID and password are accepted, the login flow validates the license before opening the ERP workspace. If no valid license exists, the login window shows a localized English, Simplified Chinese, or Japanese prompt and asks for a license key.
@@ -291,4 +299,3 @@ The following screenshots show the sign-in flow, license prompt, main dashboard,
 <img width="1040" height="650" alt="072_login_with_license_prompt" src="https://github.com/user-attachments/assets/005db6da-dff0-4833-a900-d99c9f613cee" />
 <img width="1455" height="880" alt="002_main_dashboard" src="https://github.com/user-attachments/assets/a3b2add1-81c3-427e-88ac-9aba64ad2687" />
 <img width="1455" height="880" alt="003_main_master-master-maint" src="https://github.com/user-attachments/assets/9380d098-0f62-41da-b84f-18a1c6c26594" />
-

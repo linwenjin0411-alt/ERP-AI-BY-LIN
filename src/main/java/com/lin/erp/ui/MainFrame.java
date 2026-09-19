@@ -21,7 +21,6 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
@@ -1525,27 +1524,28 @@ public class MainFrame extends JFrame {
 
     private void showSimulationResult() {
         logUserAction("SIMULATION_RUN", "pageTitle=" + english(currentModule.getTitleKey()));
-        JOptionPane.showMessageDialog(
+        AppMessages.information(
                 this,
-                t("dialog.simulate.body"),
                 t("dialog.simulate.title"),
-                JOptionPane.INFORMATION_MESSAGE
+                t("dialog.simulate.body"),
+                t("dialog.confirm.ok")
         );
         AppMessages.info(this, t("message.operation.success"));
     }
 
     private void askAiAssistant() {
-        String prompt = JOptionPane.showInputDialog(this, text(currentModule.getPromptValue()), t("action.ask"));
+        String prompt = AppMessages.input(this, t("action.ask"), text(currentModule.getPromptValue()),
+                t("dialog.confirm.ok"), t("dialog.confirm.cancel"));
         if (prompt == null || prompt.trim().length() == 0) {
             logUserAction("AI_ASK_CANCEL", "reason=emptyPrompt");
             return;
         }
         logUserAction("AI_ASK_SUBMIT", "promptLength=" + prompt.trim().length());
-        JOptionPane.showMessageDialog(
+        AppMessages.information(
                 this,
-                text("ai.answer"),
                 text(currentModule.getTitleKey()),
-                JOptionPane.INFORMATION_MESSAGE
+                text("ai.answer"),
+                t("dialog.confirm.ok")
         );
     }
 
@@ -1667,18 +1667,20 @@ public class MainFrame extends JFrame {
                 + " | record=" + selectedRecordName(modelRow)
                 + " | targetStatus=" + english(targetStatus));
 
-        Object[] options = new Object[]{t("dialog.confirm.ok"), t("dialog.confirm.cancel")};
-        int result = JOptionPane.showOptionDialog(
+        boolean confirmed = AppMessages.confirm(
                 this,
-                panel,
                 t("dialog.confirm.title"),
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.QUESTION_MESSAGE,
-                null,
-                options,
-                options[0]
+                confirmText(actionKey, modelRow, targetStatus),
+                t("dialog.confirm.ok"),
+                t("dialog.confirm.cancel")
         );
-        return result == 0;
+        return confirmed;
+    }
+
+    private String confirmText(String actionKey, int modelRow, String targetStatus) {
+        return t("dialog.confirm.action") + ": " + text(actionKey)
+                + "\n" + t("dialog.confirm.record") + ": " + selectedRecordName(modelRow)
+                + "\n" + t("dialog.confirm.status") + ": " + text(targetStatus);
     }
 
     private String selectedRecordName(int modelRow) {
