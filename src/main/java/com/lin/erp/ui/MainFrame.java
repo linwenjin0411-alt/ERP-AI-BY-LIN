@@ -20,13 +20,17 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.border.CompoundBorder;
@@ -44,10 +48,18 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
@@ -74,6 +86,7 @@ public class MainFrame extends JFrame {
     private final DbConfig dbConfig;
     private final Map<String, List<MenuNode>> childMenusByModule = new LinkedHashMap<String, List<MenuNode>>();
     private final Map<String, RoleMenuPermission> modulePermissions = new LinkedHashMap<String, RoleMenuPermission>();
+    private final Map<String, JFrame> functionWindows = new LinkedHashMap<String, JFrame>();
 
     private ModulePageData currentModule;
     private MenuNode currentSubMenu;
@@ -90,10 +103,12 @@ public class MainFrame extends JFrame {
     private JLabel companyLabel;
     private JLabel userLabel;
     private JLabel roleLabel;
+    private JLabel recentPageLabel;
     private JLabel periodLabel;
     private JTextField searchField;
     private JComboBox<Language> languageBox;
     private boolean refreshingLanguage;
+    private boolean searchPlaceholderVisible;
 
     public MainFrame(UserSession session) {
         this.session = session;
@@ -132,6 +147,7 @@ public class MainFrame extends JFrame {
         setLocationByPlatform(true);
         setContentPane(createContent());
         refreshTexts();
+        registerWorkspaceShortcuts();
         pack();
         setLocationRelativeTo(null);
     }
@@ -481,7 +497,7 @@ public class MainFrame extends JFrame {
         }
         sidebar.add(menu, BorderLayout.CENTER);
 
-        JPanel userPanel = new JPanel(new GridLayout(0, 1, 0, 3));
+        JPanel userPanel = new JPanel(new GridLayout(0, 1, 0, 5));
         userPanel.setOpaque(true);
         userPanel.setBackground(new Color(55, 60, 68));
         userPanel.setBorder(AppTheme.emptyBorder(12, 12, 12, 12));
@@ -491,8 +507,27 @@ public class MainFrame extends JFrame {
         roleLabel = new JLabel();
         roleLabel.setForeground(new Color(188, 198, 214));
         roleLabel.setFont(AppTheme.font(Font.PLAIN, 12));
+        recentPageLabel = new JLabel();
+        recentPageLabel.setForeground(new Color(188, 198, 214));
+        recentPageLabel.setFont(AppTheme.font(Font.PLAIN, 11));
+        JButton logoutButton = new JButton(t("action.logout"));
+        logoutButton.putClientProperty("JButton.buttonType", "roundRect");
+        logoutButton.putClientProperty("FlatLaf.style", "arc: 8; borderWidth: 1; focusWidth: 1");
+        logoutButton.setBackground(new Color(70, 78, 90));
+        logoutButton.setForeground(Color.WHITE);
+        logoutButton.setFocusPainted(false);
+        logoutButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        logoutButton.setBorder(AppTheme.emptyBorder(7, 10, 7, 10));
+        logoutButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                logout();
+            }
+        });
         userPanel.add(userLabel);
         userPanel.add(roleLabel);
+        userPanel.add(recentPageLabel);
+        userPanel.add(logoutButton);
         sidebar.add(userPanel, BorderLayout.SOUTH);
 
         return sidebar;
@@ -513,6 +548,8 @@ public class MainFrame extends JFrame {
         button.setBorderPainted(false);
         button.setContentAreaFilled(true);
         button.setOpaque(true);
+        button.setIcon(moduleIcon(module));
+        button.setIconTextGap(8);
         button.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -527,6 +564,21 @@ public class MainFrame extends JFrame {
             }
         });
         return button;
+    }
+
+    private javax.swing.Icon moduleIcon(ModulePageData module) {
+        String code = module == null ? "" : module.getCode();
+        Color color = "DASHBOARD".equals(code) ? AppTheme.ACCENT
+                : "MASTER".equals(code) ? new Color(54, 126, 224)
+                : "PROCUREMENT".equals(code) ? new Color(22, 163, 74)
+                : "SALES".equals(code) ? new Color(236, 132, 31)
+                : "INVENTORY".equals(code) ? new Color(20, 184, 166)
+                : "MANUFACTURING".equals(code) ? new Color(139, 92, 246)
+                : "FINANCE".equals(code) ? new Color(15, 118, 110)
+                : "AI".equals(code) ? new Color(99, 102, 241)
+                : "ADMIN".equals(code) ? new Color(100, 116, 139)
+                : AppTheme.ACCENT;
+        return new ActionIcon("action.details", color);
     }
 
     private JPanel createWorkspace() {
@@ -573,7 +625,44 @@ public class MainFrame extends JFrame {
                 BorderFactory.createLineBorder(AppTheme.BORDER),
                 AppTheme.emptyBorder(0, 11, 0, 11)
         ));
+        searchField.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                if (searchPlaceholderVisible) {
+                    searchField.setText("");
+                    searchField.setForeground(AppTheme.TEXT_PRIMARY);
+                    searchPlaceholderVisible = false;
+                }
+            }
+
+            @Override
+            public void focusLost(FocusEvent e) {
+                applySearchPlaceholderIfEmpty();
+            }
+        });
+        searchField.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                runWorkspaceSearch();
+            }
+        });
         tools.add(searchField);
+
+        JButton searchButton = new JButton(t("function.search"));
+        searchButton.putClientProperty("JButton.buttonType", "roundRect");
+        searchButton.putClientProperty("FlatLaf.style", "arc: 10; borderWidth: 0; focusWidth: 1");
+        searchButton.setBackground(AppTheme.ACCENT);
+        searchButton.setForeground(Color.WHITE);
+        searchButton.setFocusPainted(false);
+        searchButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        searchButton.setBorder(AppTheme.emptyBorder(9, 14, 9, 14));
+        searchButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                runWorkspaceSearch();
+            }
+        });
+        tools.add(searchButton);
 
         languageBox = new JComboBox<Language>(Language.values());
         languageBox.setPreferredSize(new Dimension(124, 36));
@@ -621,9 +710,12 @@ public class MainFrame extends JFrame {
         brandTaglineLabel.setText(t("app.tagline"));
         companyLabel.setText(text(session.getCompanyNameKey()));
         periodLabel.setText(t("top.period"));
-        searchField.setText(t("top.search"));
+        applySearchPlaceholderIfEmpty();
         userLabel.setText(text(session.getDisplayNameKey()));
         roleLabel.setText(text(session.getRoleNameKey()));
+        if (recentPageLabel != null && recentPageLabel.getText().trim().length() == 0) {
+            recentPageLabel.setText(t("workspace.recent.none"));
+        }
 
         refreshingLanguage = true;
         languageBox.setSelectedItem(session.getLanguage());
@@ -647,6 +739,8 @@ public class MainFrame extends JFrame {
         for (JButton button : navButtons) {
             ModulePageData module = (ModulePageData) button.getClientProperty("module");
             button.setText(text(module.getTitleKey()));
+            button.setIcon(moduleIcon(module));
+            button.setIconTextGap(8);
             styleNavButton(button, module == currentModule);
         }
 
@@ -678,6 +772,155 @@ public class MainFrame extends JFrame {
             button.setForeground(new Color(218, 226, 238));
             button.setFont(AppTheme.font(Font.PLAIN, 13));
         }
+    }
+
+    private void applySearchPlaceholderIfEmpty() {
+        if (searchField == null) {
+            return;
+        }
+        String value = searchField.getText();
+        if (value == null || value.trim().length() == 0 || searchPlaceholderVisible) {
+            searchPlaceholderVisible = true;
+            searchField.setForeground(AppTheme.TEXT_MUTED);
+            searchField.setText(t("top.search"));
+        }
+    }
+
+    private String searchQuery() {
+        if (searchField == null || searchPlaceholderVisible) {
+            return "";
+        }
+        String value = searchField.getText();
+        return value == null ? "" : value.trim().toLowerCase(I18n.locale(session.getLanguage()));
+    }
+
+    private void runWorkspaceSearch() {
+        String query = searchQuery();
+        if (query.length() == 0) {
+            searchField.requestFocusInWindow();
+            return;
+        }
+        for (ModulePageData module : modules) {
+            if (matches(query, text(module.getTitleKey())) || matches(query, text(module.getSubtitleKey()))) {
+                showModule(module);
+                AppMessages.info(this, t("message.search.matched") + text(module.getTitleKey()));
+                return;
+            }
+            MenuNode match = findMenuMatch(module, query);
+            if (match != null) {
+                currentModule = module;
+                currentSubMenu = firstVisibleSubMenu(module);
+                refreshTexts();
+                openFunctionWindow(match);
+                AppMessages.info(this, t("message.search.matched") + text(match.getNameKey()));
+                return;
+            }
+            if (matchesTable(query, module)) {
+                showModule(module);
+                AppMessages.info(this, t("message.search.matched") + text(module.getTableTitleKey()));
+                return;
+            }
+        }
+        AppMessages.info(this, t("message.search.none"));
+    }
+
+    private boolean matches(String query, String value) {
+        return value != null && value.toLowerCase(I18n.locale(session.getLanguage())).contains(query);
+    }
+
+    private MenuNode findMenuMatch(ModulePageData module, String query) {
+        List<MenuNode> children = module == null ? null : childMenusByModule.get(module.getCode());
+        if (children == null) {
+            return null;
+        }
+        for (MenuNode area : children) {
+            MenuNode match = findMenuMatch(area, query);
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
+    }
+
+    private MenuNode findMenuMatch(MenuNode node, String query) {
+        if (matches(query, text(node.getNameKey())) && !node.hasChildren()) {
+            return node;
+        }
+        for (MenuNode child : node.getChildren()) {
+            MenuNode match = findMenuMatch(child, query);
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
+    }
+
+    private boolean matchesTable(String query, ModulePageData module) {
+        if (module == null) {
+            return false;
+        }
+        for (String column : module.getTableColumns()) {
+            if (matches(query, text(column))) {
+                return true;
+            }
+        }
+        for (String[] row : module.getTableRows()) {
+            for (String value : row) {
+                if (matches(query, text(value))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void showModule(ModulePageData module) {
+        currentModule = module;
+        currentSubMenu = firstVisibleSubMenu(module);
+        refreshTexts();
+    }
+
+    private void registerWorkspaceShortcuts() {
+        JComponent root = getRootPane();
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK), "focusSearch");
+        root.getActionMap().put("focusSearch", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                searchPlaceholderVisible = true;
+                searchField.requestFocusInWindow();
+            }
+        });
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK), "refresh");
+        root.getActionMap().put("refresh", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleToolbarAction("action.refresh");
+            }
+        });
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_E, InputEvent.CTRL_DOWN_MASK), "export");
+        root.getActionMap().put("export", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleToolbarAction("action.export");
+            }
+        });
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK), "logout");
+        root.getActionMap().put("logout", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                logout();
+            }
+        });
+    }
+
+    private void logout() {
+        logUserAction("LOGOUT", "user=" + session.getUsername());
+        for (JFrame window : new ArrayList<JFrame>(functionWindows.values())) {
+            window.dispose();
+        }
+        functionWindows.clear();
+        new LoginFrame(new com.lin.erp.auth.AuthService()).setVisible(true);
+        dispose();
     }
 
     private MenuNode firstVisibleSubMenu(ModulePageData module) {
@@ -868,8 +1111,8 @@ public class MainFrame extends JFrame {
     private JButton createFunctionButton(final MenuNode function) {
         JButton button = new JButton(text(function.getNameKey()));
         button.setHorizontalAlignment(SwingConstants.CENTER);
-        button.setPreferredSize(new Dimension(210, 34));
-        button.setMinimumSize(new Dimension(170, 34));
+        button.setPreferredSize(new Dimension(210, 40));
+        button.setMinimumSize(new Dimension(170, 40));
         button.putClientProperty("JButton.buttonType", "roundRect");
         button.putClientProperty("FlatLaf.style", "arc: 4; borderWidth: 1; focusWidth: 1");
         button.setBackground(new Color(229, 232, 238));
@@ -879,7 +1122,7 @@ public class MainFrame extends JFrame {
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.setBorder(new CompoundBorder(
                 BorderFactory.createLineBorder(new Color(207, 214, 224)),
-                AppTheme.emptyBorder(7, 8, 7, 8)
+                AppTheme.emptyBorder(9, 8, 9, 8)
         ));
         button.addActionListener(new ActionListener() {
             @Override
@@ -894,6 +1137,14 @@ public class MainFrame extends JFrame {
         logUserAction("FUNCTION_CLICK", "submenu=" + (currentSubMenu == null ? "NONE" : currentSubMenu.getCode())
                 + " | function=" + function.getCode()
                 + " | functionName=" + english(function.getNameKey()));
+        JFrame existing = functionWindows.get(function.getCode());
+        if (existing != null && existing.isDisplayable()) {
+            existing.toFront();
+            existing.requestFocus();
+            existing.setState(JFrame.NORMAL);
+            logUserAction("FUNCTION_WINDOW_FOCUS", "function=" + function.getCode());
+            return;
+        }
         if (!functionPermission(function).allows("action.refresh")) {
             logUserAction("FUNCTION_OPEN_DENIED", "function=" + function.getCode());
             AppMessages.error(this, t("message.error.title"), t("message.permission.denied"));
@@ -905,6 +1156,16 @@ public class MainFrame extends JFrame {
         window.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         window.setMinimumSize(new Dimension(1080, 660));
         window.setPreferredSize(new Dimension(1180, 720));
+        window.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                functionWindows.remove(function.getCode());
+                if (recentPageLabel != null) {
+                    recentPageLabel.setText(t("workspace.recent") + text(function.getNameKey()));
+                }
+                logUserAction("FUNCTION_WINDOW_CLOSE", "function=" + function.getCode());
+            }
+        });
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(AppTheme.PAGE_BACKGROUND);
@@ -921,6 +1182,7 @@ public class MainFrame extends JFrame {
         root.add(body, BorderLayout.CENTER);
 
         window.setContentPane(root);
+        functionWindows.put(function.getCode(), window);
         window.pack();
         window.setLocationRelativeTo(this);
         window.setVisible(true);
@@ -938,11 +1200,20 @@ public class MainFrame extends JFrame {
         brand.setFont(AppTheme.font(Font.BOLD, 18));
         header.add(brand, BorderLayout.WEST);
 
-        JLabel title = new JLabel(text(function.getNameKey()), SwingConstants.RIGHT);
+        JLabel title = new JLabel("<html><div style='text-align:right'>"
+                + text(function.getNameKey()) + "<br><span style='font-size:10px;color:#b7c2d4'>"
+                + breadcrumb(function) + "</span></div></html>", SwingConstants.RIGHT);
         title.setForeground(new Color(218, 226, 238));
         title.setFont(AppTheme.font(Font.BOLD, 13));
         header.add(title, BorderLayout.EAST);
         return header;
+    }
+
+    private String breadcrumb(MenuNode function) {
+        String module = currentModule == null ? "" : text(currentModule.getTitleKey());
+        String area = currentSubMenu == null ? "" : text(currentSubMenu.getNameKey());
+        String page = function == null ? "" : text(function.getNameKey());
+        return module + " / " + area + " / " + page;
     }
 
     private JPanel createTransactionFunctionPanel(final JFrame window, final MenuNode function) {
@@ -1720,7 +1991,15 @@ public class MainFrame extends JFrame {
     }
 
     private JPanel createMetricCard(ModulePageData.Metric metric) {
+        final ModulePageData.Metric currentMetric = metric;
         RoundedPanel card = createCard(text(metric.getLabelValue()));
+        card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        card.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                drillIntoMetric(currentMetric);
+            }
+        });
         JLabel valueLabel = new JLabel(metric.getMetricValue());
         valueLabel.setForeground(colorFor(metric.getAccentCode()));
         valueLabel.setFont(AppTheme.font(Font.BOLD, 32));
@@ -1736,6 +2015,24 @@ public class MainFrame extends JFrame {
         }
         card.add(content, BorderLayout.CENTER);
         return card;
+    }
+
+    private void drillIntoMetric(ModulePageData.Metric metric) {
+        String text = (text(metric.getLabelValue()) + " " + text(metric.getNoteValue())).toLowerCase(I18n.locale(session.getLanguage()));
+        String target = text.contains("stock") || text.contains("inventory") || text.contains("库存") || text.contains("在庫")
+                ? "INVENTORY"
+                : text.contains("purchase") || text.contains("采购") || text.contains("購買")
+                ? "PROCUREMENT"
+                : text.contains("sales") || text.contains("销售") || text.contains("販売")
+                ? "SALES"
+                : text.contains("finance") || text.contains("cash") || text.contains("财务") || text.contains("会計")
+                ? "FINANCE"
+                : "DASHBOARD";
+        ModulePageData module = findModule(target);
+        if (module != null) {
+            showModule(module);
+            AppMessages.info(this, t("message.drilldown.opened") + text(module.getTitleKey()));
+        }
     }
 
     private RoundedPanel createTablePanel(final ModulePageData data, String title, String[] columns, String[][] rows) {
@@ -1755,12 +2052,17 @@ public class MainFrame extends JFrame {
         table.setForeground(AppTheme.TEXT_PRIMARY);
         table.setGridColor(new Color(238, 243, 249));
         table.setShowVerticalLines(false);
-        table.setSelectionBackground(AppTheme.ACCENT_SOFT);
-        table.setSelectionForeground(AppTheme.TEXT_PRIMARY);
+        table.setSelectionBackground(new Color(194, 238, 229));
+        table.setSelectionForeground(new Color(18, 84, 80));
         table.setBackground(Color.WHITE);
+        table.setComponentPopupMenu(createTablePopup(table));
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    selectPopupRow(table, e);
+                    return;
+                }
                 if (e.getClickCount() == 2 && "OPERATIONAL".equals(data.getPageType())) {
                     int row = selectedModelRow();
                     logUserAction("TABLE_ROW_DOUBLE_CLICK", "row=" + row
@@ -1768,6 +2070,20 @@ public class MainFrame extends JFrame {
                     if (ensureToolbarActionAllowed("action.edit")) {
                         openRecordForm(true);
                     }
+                }
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    selectPopupRow(table, e);
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    selectPopupRow(table, e);
                 }
             }
         });
@@ -1779,7 +2095,105 @@ public class MainFrame extends JFrame {
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBorder(BorderFactory.createLineBorder(AppTheme.BORDER));
         card.add(scrollPane, BorderLayout.CENTER);
+        JLabel footer = new JLabel(rows.length == 0 ? t("table.empty") : t("table.rows") + rows.length);
+        footer.setForeground(AppTheme.TEXT_MUTED);
+        footer.setFont(AppTheme.font(Font.PLAIN, 11));
+        card.add(footer, BorderLayout.SOUTH);
         return card;
+    }
+
+    private JPopupMenu createTablePopup(final JTable table) {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem copy = new JMenuItem(t("table.menu.copyCell"));
+        copy.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                copySelectedCell(table);
+            }
+        });
+        JMenuItem exportRow = new JMenuItem(t("table.menu.exportRow"));
+        exportRow.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                exportSelectedRow(table);
+            }
+        });
+        JMenuItem details = new JMenuItem(t("table.menu.details"));
+        details.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (selectedModelRow() >= 0 && ensureToolbarActionAllowed("action.edit")) {
+                    openRecordForm(true);
+                }
+            }
+        });
+        menu.add(copy);
+        menu.add(exportRow);
+        menu.add(details);
+        return menu;
+    }
+
+    private void selectPopupRow(JTable table, MouseEvent event) {
+        int row = table.rowAtPoint(event.getPoint());
+        int column = table.columnAtPoint(event.getPoint());
+        if (row >= 0) {
+            table.setRowSelectionInterval(row, row);
+        }
+        if (column >= 0) {
+            table.setColumnSelectionInterval(column, column);
+        }
+    }
+
+    private void copySelectedCell(JTable table) {
+        int row = table.getSelectedRow();
+        int column = table.getSelectedColumn();
+        if (row < 0 || column < 0) {
+            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
+            return;
+        }
+        Object value = table.getValueAt(row, column);
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(value == null ? "" : value.toString()), null);
+        AppMessages.info(this, t("message.copy.done"));
+    }
+
+    private void exportSelectedRow(JTable table) {
+        int row = table.getSelectedRow();
+        if (row < 0) {
+            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
+            return;
+        }
+        File exportDir = new File("exports");
+        if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
+            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
+            return;
+        }
+        File file = new File(exportDir, "selected-row-" + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".csv");
+        Writer writer = null;
+        try {
+            writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
+            writer.write('\ufeff');
+            String[] headers = new String[table.getColumnCount()];
+            String[] values = new String[table.getColumnCount()];
+            for (int i = 0; i < table.getColumnCount(); i++) {
+                headers[i] = table.getColumnName(i);
+                Object value = table.getValueAt(row, i);
+                values[i] = value == null ? "" : value.toString();
+            }
+            writeCsvLine(writer, headers);
+            writeCsvLine(writer, values);
+            AppMessages.success(this, t("message.export.success") + file.getAbsolutePath());
+        } catch (Exception e) {
+            AppLogger.error("Selected row export failed.", e);
+            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
+        } finally {
+            if (writer != null) {
+                try {
+                    writer.close();
+                } catch (Exception ignored) {
+                    // Row export already finished or failed.
+                }
+            }
+        }
     }
 
     private JPanel createProcessPanel(String title, String[] steps) {

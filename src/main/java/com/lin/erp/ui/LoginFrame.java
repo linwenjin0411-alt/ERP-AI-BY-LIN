@@ -21,6 +21,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JScrollPane;
 import javax.swing.SwingWorker;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
@@ -101,7 +102,13 @@ public class LoginFrame extends JFrame {
         root.setBackground(AppTheme.PAGE_BACKGROUND);
         root.setBorder(AppTheme.emptyBorder(28, 28, 28, 28));
         root.add(createBrandPanel(), BorderLayout.CENTER);
-        root.add(createLoginPanel(), BorderLayout.EAST);
+        JScrollPane loginScroll = new JScrollPane(createLoginPanel());
+        loginScroll.setBorder(null);
+        loginScroll.setOpaque(false);
+        loginScroll.getViewport().setOpaque(false);
+        loginScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        loginScroll.getVerticalScrollBar().setUnitIncrement(18);
+        root.add(loginScroll, BorderLayout.EAST);
         return root;
     }
 

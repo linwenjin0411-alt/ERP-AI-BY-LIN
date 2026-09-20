@@ -122,6 +122,10 @@ Main navigation uses an mcframe-style three-level layout: dark root module menu,
 
 Business pages use a unified mcframe-style work screen: toolbar actions, searchable and sortable tables, side context, document numbering rule, organization/period context, and CSV export. Query, report, AI, and inventory ledger pages are read-only by design.
 
+Workspace search supports module, function, column, and visible row text matching. Reopening an already-open function focuses the existing window instead of creating a duplicate, and the side footer records the most recently closed function. Tables support a right-click menu for copying a cell, exporting the current row, and opening details.
+
+Keyboard shortcuts: `Ctrl+F` focuses workspace search, `Ctrl+R` refreshes the current page, `Ctrl+E` exports the current table, and `Ctrl+L` signs out.
+
 ## Internationalization
 
 The application ships English, Simplified Chinese, and Japanese text. Built-in text remains in `I18n.java` for compatibility, and high-frequency labels can be overridden from UTF-8 resource files under `src/main/resources/i18n/messages_*.properties`.

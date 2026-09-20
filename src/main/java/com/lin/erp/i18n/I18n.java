@@ -45,7 +45,7 @@ public final class I18n {
         put("login.password", "Password", "密码", "パスワード");
         put("login.company", "Company", "公司", "会社");
         put("login.language", "Language", "语言", "言語");
-        put("login.remember", "Remember this workstation", "记住本机登录信息", "この端末を記憶する");
+        put("login.remember", "Remember workstation note only", "仅标记本机提示", "端末メモのみ");
         put("login.button", "Sign in", "登录", "ログイン");
         put("login.test.account", "Demo account: admin / admin123", "测试账号：admin / admin123", "デモアカウント：admin / admin123");
         put("login.footer", "Next: user master, RBAC, organization switch, and audit log.",
@@ -72,6 +72,12 @@ public final class I18n {
         put("message.operation.success", "Operation completed successfully.", "操作成功。", "操作が完了しました。");
         put("message.edit.success", "Changes saved successfully.", "修改成功。", "変更を保存しました。");
         put("message.language.changed", "Language changed.", "语言已切换。", "言語を切り替えました。");
+        put("message.search.matched", "Opened: ", "已打开：", "開きました：");
+        put("message.search.none", "No matching module, function, or table row was found.",
+                "未找到匹配的模块、功能或表格记录。",
+                "一致するモジュール、機能、テーブル行が見つかりません。");
+        put("message.copy.done", "Copied to clipboard.", "已复制到剪贴板。", "クリップボードにコピーしました。");
+        put("message.drilldown.opened", "Drilldown opened: ", "已钻取：", "ドリルダウンを開きました：");
         put("message.select.row", "Select a row first.", "请先选择一行数据。", "先に行を選択してください。");
         put("message.create.success", "Record created successfully.", "新建成功。", "レコードを作成しました。");
         put("message.approve.success", "Approval completed.", "审批完成。", "承認が完了しました。");
@@ -251,6 +257,14 @@ public final class I18n {
         put("action.delete", "Delete", "删除", "削除");
         put("action.details", "Details", "详情", "詳細");
         put("action.ask", "Ask", "提问", "質問");
+        put("action.logout", "Sign out", "退出登录", "ログアウト");
+        put("workspace.recent", "Recent: ", "最近：", "最近：");
+        put("workspace.recent.none", "Recent: none", "最近：无", "最近：なし");
+        put("table.empty", "No rows. Adjust filters or refresh.", "暂无记录，请调整筛选或刷新。", "行がありません。条件を変更するか更新してください。");
+        put("table.rows", "Rows: ", "行数：", "行数：");
+        put("table.menu.copyCell", "Copy cell", "复制单元格", "セルをコピー");
+        put("table.menu.exportRow", "Export row", "导出当前行", "行をエクスポート");
+        put("table.menu.details", "Open details", "打开详情", "詳細を開く");
 
         put("menu.area.master.maintenance", "Master Maintenance", "主数据维护", "マスタ保守");
         put("menu.area.governance", "Governance", "治理管理", "ガバナンス");
