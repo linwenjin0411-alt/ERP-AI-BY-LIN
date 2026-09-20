@@ -224,6 +224,13 @@ public final class BusinessFunctionCatalog {
     }
 
     private static void addProcurementPages() {
+        add("PROCUREMENT_PR", transactionFields(),
+                new String[]{"PR-2608-031", "2026/08/31", "status.open", "SUP-2007", "FG-3007", "120", "WH-A", "owner.procurement", "Request for source selection"},
+                transactionColumns(),
+                new String[][]{{"1", "FG-3007", "120", "status.open", "term.stockOverview"}, {"2", "RM-1008", "420", "status.open", "term.receipt"}},
+                "Purchase request -> Source selection -> Purchase order",
+                "Item master and demand plan",
+                "Supplier quotation and purchase order");
         add("PROCUREMENT_PO", transactionFields(),
                 new String[]{"PO-45000127", "2026/08/31", "status.released", "SUP-2007", "RM-1008", "3000", "WH-A", "owner.procurement", "Due 2026/09/03"},
                 transactionColumns(),

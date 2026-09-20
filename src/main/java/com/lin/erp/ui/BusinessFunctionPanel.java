@@ -482,7 +482,7 @@ public class BusinessFunctionPanel extends JPanel {
     private void rebuildTable(long preferredRecordId) {
         String[][] rows = new String[records.size()][];
         for (int i = 0; i < records.size(); i++) {
-            rows[i] = localized(recordValuesForDisplay(records.get(i)));
+            rows[i] = localized(recordValuesForDisplay(records.get(i), i));
         }
         tableModel.setDataVector(rows, localized(definition.getTableColumnKeys()));
         tableSorter.setModel(tableModel);
@@ -601,20 +601,59 @@ public class BusinessFunctionPanel extends JPanel {
         return formValues;
     }
 
-    private String[] recordValuesForDisplay(FunctionRecord record) {
+    private String[] recordValuesForDisplay(FunctionRecord record, int rowIndex) {
         String[] columns = definition.getTableColumnKeys();
         String[] values = record.getValues();
         String[] persistenceKeys = definition.getPersistenceKeys();
         String[] display = new String[columns.length];
+        if (isStoredTableRow(values, columns)) {
+            for (int i = 0; i < columns.length; i++) {
+                display[i] = valueAt(values, i);
+            }
+            return display;
+        }
         for (int i = 0; i < columns.length; i++) {
+            if ("function.table.line".equals(columns[i])) {
+                display[i] = rowIndex >= 0 ? String.valueOf(rowIndex + 1) : displayRecordId(record);
+                continue;
+            }
             int sourceIndex = persistenceIndexForColumn(columns[i], persistenceKeys);
-            if (sourceIndex >= 0 && sourceIndex < values.length) {
-                display[i] = values[sourceIndex];
-            } else {
-                display[i] = "";
+            display[i] = sourceIndex >= 0 && sourceIndex < values.length ? values[sourceIndex] : "";
+            if (isBlank(display[i])) {
+                display[i] = legacyTableValue(columns, values, i);
+            }
+            if (isBlank(display[i]) && "column.next".equals(columns[i])) {
+                display[i] = nextStepKey();
             }
         }
         return display;
+    }
+
+    private boolean isStoredTableRow(String[] values, String[] columns) {
+        if (values == null || columns == null || values.length != columns.length) {
+            return false;
+        }
+        if (columns.length == 0) {
+            return true;
+        }
+        if ("function.table.line".equals(columns[0])) {
+            return isInteger(valueAt(values, 0));
+        }
+        String[] persistenceKeys = definition.getPersistenceKeys();
+        return persistenceKeys.length == 0
+                || persistenceIndexForColumn(columns[0], persistenceKeys) < 0
+                || columnMatches(columns[0], persistenceKeys[0]);
+    }
+
+    private String legacyTableValue(String[] columns, String[] values, int columnIndex) {
+        if (values == null || columns == null) {
+            return "";
+        }
+        if (columns.length > 0 && "function.table.line".equals(columns[0])
+                && values.length == columns.length - 1 && columnIndex > 0) {
+            return valueAt(values, columnIndex - 1);
+        }
+        return "";
     }
 
     private String[] valuesForTable(String[] formValues, String status) {
@@ -755,6 +794,21 @@ public class BusinessFunctionPanel extends JPanel {
         return values[index].trim();
     }
 
+    private String valueAt(String[] values, int index) {
+        if (values == null || index < 0 || index >= values.length || values[index] == null) {
+            return "";
+        }
+        return values[index];
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().length() == 0;
+    }
+
+    private boolean isInteger(String value) {
+        return value != null && value.trim().matches("\\d+");
+    }
+
     private String[] localized(String[] values) {
         String[] localized = new String[values.length];
         for (int i = 0; i < values.length; i++) {
@@ -788,7 +842,7 @@ public class BusinessFunctionPanel extends JPanel {
     }
 
     private String deleteSummary(FunctionRecord record) {
-        String[] values = recordValuesForDisplay(record);
+        String[] values = recordValuesForDisplay(record, -1);
         StringBuilder summary = new StringBuilder(displayRecordId(record));
         for (int i = 1; i < values.length && i < 4; i++) {
             if (values[i] != null && values[i].trim().length() > 0) {
