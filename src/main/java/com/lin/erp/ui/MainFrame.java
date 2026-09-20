@@ -2196,7 +2196,7 @@ public class MainFrame extends JFrame {
         table.setSelectionBackground(new Color(194, 238, 229));
         table.setSelectionForeground(new Color(18, 84, 80));
         table.setBackground(Color.WHITE);
-        table.setDefaultRenderer(Object.class, new StatusBadgeTableCellRenderer());
+        table.setDefaultRenderer(Object.class, new StatusBadgeTableCellRenderer(rawRows(data)));
         table.setComponentPopupMenu(createTablePopup(table));
         table.addMouseListener(new MouseAdapter() {
             @Override
@@ -2477,6 +2477,20 @@ public class MainFrame extends JFrame {
                 } else {
                     rows[rowIndex][columnIndex] = "";
                 }
+            }
+        }
+        return rows;
+    }
+
+    private String[][] rawRows(ModulePageData data) {
+        int columns = data.getTableColumns().size();
+        String[][] rows = new String[data.getTableRows().size()][columns];
+        for (int rowIndex = 0; rowIndex < data.getTableRows().size(); rowIndex++) {
+            String[] source = data.getTableRows().get(rowIndex);
+            for (int columnIndex = 0; columnIndex < columns; columnIndex++) {
+                rows[rowIndex][columnIndex] = columnIndex < source.length && source[columnIndex] != null
+                        ? source[columnIndex]
+                        : "";
             }
         }
         return rows;
