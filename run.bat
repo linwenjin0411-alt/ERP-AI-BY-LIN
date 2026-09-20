@@ -67,6 +67,14 @@ if "%NEED_BUILD%"=="0" (
   )
 )
 
+if "%NEED_BUILD%"=="0" (
+  "%JAVA_CMD%" -cp "%APP_JAR%" com.lin.erp.ui.ExportDiagnostics --self-check >nul 2>nul
+  if errorlevel 1 (
+    echo Application jar is missing recent export runtime classes. Rebuilding it now...
+    set "NEED_BUILD=1"
+  )
+)
+
 if "%NEED_BUILD%"=="1" (
   if /i "%~1"=="--compile-only" (
     if exist "scripts\check-encoding.ps1" (
@@ -88,6 +96,7 @@ if "%NEED_BUILD%"=="1" (
   )
 
   echo Building Linova One ERP with Maven...
+  echo Please wait. First build may take a few minutes while dependencies are prepared.
   if not exist "build" mkdir "build"
   call mvn -q -DskipTests "-Dmaven.repo.local=%MAVEN_REPO%" package
   if errorlevel 1 (
@@ -126,6 +135,13 @@ if /i "%~1"=="--diagnose-login" (
   ) else (
     "%JAVA_CMD%" -cp "%APP_JAR%" com.lin.erp.Diagnostics --login "%~2" "%~3"
   )
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
+if /i "%~1"=="--diagnose-export" (
+  echo Diagnosing Linova One ERP export...
+  "%JAVA_CMD%" -cp "%APP_JAR%" com.lin.erp.ui.ExportDiagnostics --smoke
   if errorlevel 1 exit /b 1
   exit /b 0
 )

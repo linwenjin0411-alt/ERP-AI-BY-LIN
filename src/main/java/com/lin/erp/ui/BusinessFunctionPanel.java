@@ -19,6 +19,8 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.JComponent;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.RowFilter;
@@ -38,6 +40,8 @@ import java.awt.GridLayout;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.sql.SQLException;
@@ -81,8 +85,22 @@ public class BusinessFunctionPanel extends JPanel {
         setOpaque(false);
         add(createToolbar(), BorderLayout.NORTH);
         add(createBody(), BorderLayout.CENTER);
+        registerShortcuts();
         reload();
         logAction("FUNCTION_PAGE_OPEN", "function=" + function.getCode());
+    }
+
+    private void registerShortcuts() {
+        getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK), "focusFilter");
+        getActionMap().put("focusFilter", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (filterField != null) {
+                    filterField.requestFocusInWindow();
+                    filterField.selectAll();
+                }
+            }
+        });
     }
 
     private JPanel createToolbar() {
@@ -252,6 +270,7 @@ public class BusinessFunctionPanel extends JPanel {
         table.setBackground(Color.WHITE);
         table.setSelectionBackground(AppTheme.ACCENT_SOFT);
         table.setSelectionForeground(AppTheme.TEXT_PRIMARY);
+        table.setDefaultRenderer(Object.class, new StatusBadgeTableCellRenderer());
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -527,7 +546,7 @@ public class BusinessFunctionPanel extends JPanel {
         tableSorter.setModel(tableModel);
         TableColumnPreferences.install(table, "business." + function.getCode() + "." + session.getLanguage().name());
         applyFilter();
-        countLabel.setText(t("item.count.prefix") + records.size());
+        countLabel.setText(records.isEmpty() ? t("table.empty.action") : t("item.count.prefix") + records.size());
         selectRecord(preferredRecordId);
         if (totalLabel != null) {
             totalLabel.setText(String.valueOf(records.size()));
@@ -581,6 +600,7 @@ public class BusinessFunctionPanel extends JPanel {
                                 + " | format=" + format.name() + " | rows=" + snapshot.rowCount()
                                 + " | file=" + file.getAbsolutePath());
                         AppMessages.success(owner, t("message.export.success") + file.getAbsolutePath());
+                        ReportExportSupport.confirmOpenFolder(owner, session.getLanguage(), file);
                     }
                 }
         );
