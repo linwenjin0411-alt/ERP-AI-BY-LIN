@@ -13,8 +13,8 @@ import com.lin.erp.logging.AppLogger;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -40,16 +40,11 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 
 public class BusinessFunctionPanel extends JPanel {
     private final Window owner;
@@ -64,6 +59,12 @@ public class BusinessFunctionPanel extends JPanel {
     private DefaultTableModel tableModel;
     private TableRowSorter<DefaultTableModel> tableSorter;
     private JTextField filterField;
+    private JTextField dateFromFilter;
+    private JTextField dateToFilter;
+    private JTextField organizationFilter;
+    private JTextField warehouseFilter;
+    private JTextField partnerFilter;
+    private JComboBox<String> statusFilter;
     private JLabel countLabel;
     private JLabel totalLabel;
     private JLabel openLabel;
@@ -122,13 +123,67 @@ public class BusinessFunctionPanel extends JPanel {
             }
         });
         actions.add(filterField);
+        if (isReportPage()) {
+            dateFromFilter = addReportFilter(actions, "From");
+            dateToFilter = addReportFilter(actions, "To");
+            organizationFilter = addReportFilter(actions, "Org");
+            warehouseFilter = addReportFilter(actions, "Warehouse");
+            partnerFilter = addReportFilter(actions, "Partner");
+        }
+        statusFilter = new JComboBox<String>(new String[]{"", "status.open", "status.released", "status.ready", "status.posted", "status.cancelled"});
+        statusFilter.setPreferredSize(new Dimension(150, 34));
+        statusFilter.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+                                                                  boolean isSelected, boolean cellHasFocus) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                String text = value == null ? "" : value.toString();
+                label.setText(text.length() == 0 ? "All status" : BusinessFunctionPanel.this.text(text));
+                return label;
+            }
+        });
+        statusFilter.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyFilter();
+            }
+        });
+        actions.add(statusFilter);
         actions.add(createActionButton("action.new", "action.new"));
         actions.add(createActionButton("action.edit", "action.edit"));
         actions.add(createActionButton("action.delete", "action.delete"));
         actions.add(createActionButton("action.refresh", "action.refresh"));
+        if (isReportPage()) {
+            actions.add(createActionButton("action.printPreview", "action.printPreview"));
+            actions.add(createActionButton("action.aiSummary", "action.ask"));
+        }
         actions.add(createActionButton("action.export", "action.export"));
         toolbar.add(actions, BorderLayout.EAST);
         return toolbar;
+    }
+
+    private JTextField addReportFilter(JPanel actions, String placeholder) {
+        JTextField field = new JTextField(7);
+        field.putClientProperty("JTextField.placeholderText", placeholder);
+        field.setBorder(AppTheme.emptyBorder(8, 10, 8, 10));
+        field.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+        });
+        actions.add(field);
+        return field;
     }
 
     private JButton createActionButton(final String actionKey, String iconKey) {
@@ -208,7 +263,7 @@ public class BusinessFunctionPanel extends JPanel {
             }
         });
         JTableHeader header = table.getTableHeader();
-        header.setReorderingAllowed(false);
+        header.setReorderingAllowed(true);
         header.setBackground(new Color(248, 250, 252));
         header.setForeground(AppTheme.TEXT_MUTED);
         header.setFont(AppTheme.font(Font.BOLD, 11));
@@ -301,6 +356,10 @@ public class BusinessFunctionPanel extends JPanel {
             AppMessages.info(owner, t("message.refresh.done"));
         } else if ("action.export".equals(actionKey)) {
             export();
+        } else if ("action.printPreview".equals(actionKey)) {
+            showPrintPreview();
+        } else if ("action.aiSummary".equals(actionKey)) {
+            showAiSummary();
         }
     }
 
@@ -308,7 +367,7 @@ public class BusinessFunctionPanel extends JPanel {
         if (permission.allows(actionKey)) {
             if (definition.isReadOnly()
                     && ("action.new".equals(actionKey) || "action.edit".equals(actionKey) || "action.delete".equals(actionKey))) {
-                AppMessages.error(owner, t("message.error.title"), "This page is read-only. Use filter, sort, refresh, or export.");
+                AppMessages.error(owner, t("message.error.title"), t("message.readonly.page"));
                 return false;
             }
             return true;
@@ -365,6 +424,7 @@ public class BusinessFunctionPanel extends JPanel {
         }
 
         final FunctionRecord selectedRecord = selected;
+        final long[] savedId = new long[]{selectedRecord == null ? -1L : selectedRecord.getId()};
         BackgroundTasks.run(
                 owner,
                 "Function record save failed.",
@@ -376,7 +436,7 @@ public class BusinessFunctionPanel extends JPanel {
                         if (editMode) {
                             repository.updateRecord(selectedRecord.getId(), valuesForTable(formValues, currentStatusValue(formValues)));
                         } else {
-                            repository.createRecord(function.getCode(), valuesForTable(formValues, "status.open"));
+                            savedId[0] = repository.createRecord(function.getCode(), valuesForTable(formValues, "status.open"));
                         }
                         return null;
                     }
@@ -385,7 +445,7 @@ public class BusinessFunctionPanel extends JPanel {
                     @Override
                     public void accept(Void value) {
                         AppMessages.success(owner, editMode ? t("message.edit.success") : t("message.create.success"));
-                        reload();
+                        reload(savedId[0]);
                     }
                 }
         );
@@ -397,15 +457,15 @@ public class BusinessFunctionPanel extends JPanel {
             AppMessages.error(owner, t("message.error.title"), t("message.select.row"));
             return;
         }
-        FunctionRecord record = records.get(row);
-        int result = JOptionPane.showConfirmDialog(
+        final FunctionRecord record = records.get(row);
+        boolean confirmed = AppMessages.confirm(
                 owner,
-                t("message.delete.confirm") + " " + displayRecordId(record) + " ?",
                 t("dialog.confirm.title"),
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.WARNING_MESSAGE
+                t("message.delete.confirm") + " " + deleteSummary(record) + " ?",
+                t("dialog.confirm.ok"),
+                t("dialog.confirm.cancel")
         );
-        if (result != JOptionPane.OK_OPTION) {
+        if (!confirmed) {
             return;
         }
 
@@ -432,6 +492,10 @@ public class BusinessFunctionPanel extends JPanel {
     }
 
     private void reload() {
+        reload(selectedRecordId());
+    }
+
+    private void reload(final long preferredRecordId) {
         BackgroundTasks.run(
                 owner,
                 "Function record load failed.",
@@ -448,24 +512,23 @@ public class BusinessFunctionPanel extends JPanel {
                     public void accept(List<FunctionRecord> loaded) {
                         records.clear();
                         records.addAll(loaded);
-                        rebuildTable();
+                        rebuildTable(preferredRecordId);
                     }
                 }
         );
     }
 
-    private void rebuildTable() {
+    private void rebuildTable(long preferredRecordId) {
         String[][] rows = new String[records.size()][];
         for (int i = 0; i < records.size(); i++) {
-            rows[i] = localized(records.get(i).getValues());
+            rows[i] = localized(recordValuesForDisplay(records.get(i), i));
         }
         tableModel.setDataVector(rows, localized(definition.getTableColumnKeys()));
         tableSorter.setModel(tableModel);
+        TableColumnPreferences.install(table, "business." + function.getCode() + "." + session.getLanguage().name());
         applyFilter();
         countLabel.setText(t("item.count.prefix") + records.size());
-        if (records.size() > 0) {
-            table.setRowSelectionInterval(0, 0);
-        }
+        selectRecord(preferredRecordId);
         if (totalLabel != null) {
             totalLabel.setText(String.valueOf(records.size()));
             releasedLabel.setText(String.valueOf(countStatus("status.released")));
@@ -487,34 +550,93 @@ public class BusinessFunctionPanel extends JPanel {
     }
 
     private void export() {
-        File exportDir = new File("exports");
-        if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
-            AppMessages.error(owner, t("message.error.title"), t("message.export.failed"));
+        final ReportExportSupport.Format format = ReportExportSupport.chooseFormat(owner);
+        if (format == null) {
             return;
         }
-
-        File file = new File(exportDir, function.getCode().toLowerCase() + "-"
-                + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".csv");
-        Writer writer = null;
-        try {
-            writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
-            writer.write('\ufeff');
-            writeCsvLine(writer, localized(definition.getTableColumnKeys()));
-            for (FunctionRecord record : records) {
-                writeCsvLine(writer, localized(record.getValues()));
-            }
-            AppMessages.success(owner, t("message.export.success") + file.getAbsolutePath());
-        } catch (Exception e) {
-            AppLogger.error("Function record export failed.", e);
-            AppMessages.error(owner, t("message.error.title"), t("message.export.failed"));
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (Exception ignored) {
-                    // Export already completed or failed.
+        final ReportExportSupport.Snapshot snapshot = ReportExportSupport.snapshot(
+                text(function.getNameKey()),
+                function.getCode().toLowerCase() + "-" + safeFilterSuffix(),
+                session,
+                filterSummary(),
+                table
+        );
+        logAction("REPORT_EXPORT_START", "function=" + function.getCode() + " | format=" + format.name()
+                + " | filters=" + filterSummary());
+        BackgroundTasks.run(
+                owner,
+                "Report export failed.",
+                t("message.error.title"),
+                t("message.export.failed"),
+                new BackgroundTasks.Work<java.io.File>() {
+                    @Override
+                    public java.io.File run() throws Exception {
+                        return ReportExportSupport.export(snapshot, format);
+                    }
+                },
+                new BackgroundTasks.Success<java.io.File>() {
+                    @Override
+                    public void accept(java.io.File file) {
+                        logAction("REPORT_EXPORT_SUCCESS", "function=" + function.getCode()
+                                + " | format=" + format.name() + " | rows=" + snapshot.rowCount()
+                                + " | file=" + file.getAbsolutePath());
+                        AppMessages.success(owner, t("message.export.success") + file.getAbsolutePath());
+                    }
                 }
+        );
+    }
+
+    private void showPrintPreview() {
+        ReportExportSupport.Snapshot snapshot = ReportExportSupport.snapshot(
+                text(function.getNameKey()),
+                function.getCode().toLowerCase(),
+                session,
+                filterSummary(),
+                table
+        );
+        logAction("REPORT_PRINT_PREVIEW", "function=" + function.getCode() + " | rows=" + snapshot.rowCount());
+        ReportExportSupport.showPrintPreview(owner, snapshot);
+    }
+
+    private void showAiSummary() {
+        String summary = "Report summary\n"
+                + "Rows: " + table.getRowCount() + "\n"
+                + "Generated by: " + session.getUsername() + "\n"
+                + "Filters: " + filterSummary() + "\n"
+                + "Source: " + text(function.getNameKey()) + " visible report rows.";
+        logAction("REPORT_AI_SUMMARY", "function=" + function.getCode() + " | rows=" + table.getRowCount());
+        AppMessages.information(owner, t("action.aiSummary"), summary, t("dialog.confirm.ok"));
+    }
+
+    private boolean isReportPage() {
+        return function.getCode() != null && function.getCode().startsWith("REPORT_");
+    }
+
+    private String filterSummary() {
+        List<String> parts = new ArrayList<String>();
+        addFilterPart(parts, "Search", textValue(filterField));
+        addFilterPart(parts, "Status", statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString());
+        addFilterPart(parts, "From", textValue(dateFromFilter));
+        addFilterPart(parts, "To", textValue(dateToFilter));
+        addFilterPart(parts, "Org", textValue(organizationFilter));
+        addFilterPart(parts, "Warehouse", textValue(warehouseFilter));
+        addFilterPart(parts, "Partner", textValue(partnerFilter));
+        if (parts.isEmpty()) {
+            return "None";
+        }
+        StringBuilder summary = new StringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) {
+                summary.append("; ");
             }
+            summary.append(parts.get(i));
+        }
+        return summary.toString();
+    }
+
+    private void addFilterPart(List<String> parts, String name, String value) {
+        if (value != null && value.trim().length() > 0) {
+            parts.add(name + "=" + value.trim());
         }
     }
 
@@ -531,11 +653,66 @@ public class BusinessFunctionPanel extends JPanel {
             return;
         }
         String filter = filterField.getText();
-        if (filter == null || filter.trim().length() == 0) {
+        String status = statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString();
+        List<RowFilter<Object, Object>> filters = new ArrayList<RowFilter<Object, Object>>();
+        if (filter != null && filter.trim().length() > 0) {
+            filters.add(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(filter.trim())));
+        }
+        if (status.length() > 0) {
+            filters.add(RowFilter.regexFilter("(?i)^" + java.util.regex.Pattern.quote(text(status)) + "$"));
+        }
+        addTextFilter(filters, organizationFilter);
+        addTextFilter(filters, warehouseFilter);
+        addTextFilter(filters, partnerFilter);
+        addDateRangeFilter(filters);
+        if (filters.isEmpty()) {
             tableSorter.setRowFilter(null);
             return;
         }
-        tableSorter.setRowFilter(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(filter.trim())));
+        tableSorter.setRowFilter(RowFilter.andFilter(filters));
+    }
+
+    private void addTextFilter(List<RowFilter<Object, Object>> filters, JTextField field) {
+        String value = textValue(field);
+        if (value.length() > 0) {
+            filters.add(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(value)));
+        }
+    }
+
+    private void addDateRangeFilter(List<RowFilter<Object, Object>> filters) {
+        final String from = normalizeDate(textValue(dateFromFilter));
+        final String to = normalizeDate(textValue(dateToFilter));
+        if (from.length() == 0 && to.length() == 0) {
+            return;
+        }
+        filters.add(new RowFilter<Object, Object>() {
+            @Override
+            public boolean include(Entry<?, ?> entry) {
+                for (int i = 0; i < entry.getValueCount(); i++) {
+                    String value = normalizeDate(String.valueOf(entry.getValue(i)));
+                    if (value.length() == 0) {
+                        continue;
+                    }
+                    if ((from.length() == 0 || value.compareTo(from) >= 0)
+                            && (to.length() == 0 || value.compareTo(to) <= 0)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        });
+    }
+
+    private String textValue(JTextField field) {
+        return field == null || field.getText() == null ? "" : field.getText().trim();
+    }
+
+    private String normalizeDate(String value) {
+        if (value == null) {
+            return "";
+        }
+        String digits = value.replaceAll("[^0-9]", "");
+        return digits.length() >= 8 ? digits.substring(0, 8) : "";
     }
 
     private String[] createDefaultFormValues() {
@@ -552,7 +729,7 @@ public class BusinessFunctionPanel extends JPanel {
 
     private String[] recordValuesForForm(FunctionRecord record) {
         String[] formValues = createDefaultFormValues();
-        String[] columns = definition.getTableColumnKeys();
+        String[] columns = definition.getPersistenceKeys();
         String[] values = record.getValues();
         for (int i = 0; i < columns.length && i < values.length; i++) {
             int index = fieldIndexForColumn(columns[i]);
@@ -563,8 +740,63 @@ public class BusinessFunctionPanel extends JPanel {
         return formValues;
     }
 
-    private String[] valuesForTable(String[] formValues, String status) {
+    private String[] recordValuesForDisplay(FunctionRecord record, int rowIndex) {
         String[] columns = definition.getTableColumnKeys();
+        String[] values = record.getValues();
+        String[] persistenceKeys = definition.getPersistenceKeys();
+        String[] display = new String[columns.length];
+        if (isStoredTableRow(values, columns)) {
+            for (int i = 0; i < columns.length; i++) {
+                display[i] = valueAt(values, i);
+            }
+            return display;
+        }
+        for (int i = 0; i < columns.length; i++) {
+            if ("function.table.line".equals(columns[i])) {
+                display[i] = rowIndex >= 0 ? String.valueOf(rowIndex + 1) : displayRecordId(record);
+                continue;
+            }
+            int sourceIndex = persistenceIndexForColumn(columns[i], persistenceKeys);
+            display[i] = sourceIndex >= 0 && sourceIndex < values.length ? values[sourceIndex] : "";
+            if (isBlank(display[i])) {
+                display[i] = legacyTableValue(columns, values, i);
+            }
+            if (isBlank(display[i]) && "column.next".equals(columns[i])) {
+                display[i] = nextStepKey();
+            }
+        }
+        return display;
+    }
+
+    private boolean isStoredTableRow(String[] values, String[] columns) {
+        if (values == null || columns == null || values.length != columns.length) {
+            return false;
+        }
+        if (columns.length == 0) {
+            return true;
+        }
+        if ("function.table.line".equals(columns[0])) {
+            return isInteger(valueAt(values, 0));
+        }
+        String[] persistenceKeys = definition.getPersistenceKeys();
+        return persistenceKeys.length == 0
+                || persistenceIndexForColumn(columns[0], persistenceKeys) < 0
+                || columnMatches(columns[0], persistenceKeys[0]);
+    }
+
+    private String legacyTableValue(String[] columns, String[] values, int columnIndex) {
+        if (values == null || columns == null) {
+            return "";
+        }
+        if (columns.length > 0 && "function.table.line".equals(columns[0])
+                && values.length == columns.length - 1 && columnIndex > 0) {
+            return valueAt(values, columnIndex - 1);
+        }
+        return "";
+    }
+
+    private String[] valuesForTable(String[] formValues, String status) {
+        String[] columns = definition.getPersistenceKeys();
         String[] values = new String[Math.min(8, columns.length)];
         for (int i = 0; i < values.length; i++) {
             values[i] = valueForColumn(columns[i], formValues, i, status);
@@ -577,7 +809,7 @@ public class BusinessFunctionPanel extends JPanel {
             String line = formValue(formValues, 0);
             return line.matches("\\d+") ? line : String.valueOf(records.size() + 1);
         }
-        if ("column.status".equals(columnKey)) {
+        if ("column.status".equals(columnKey) || "function.field.status".equals(columnKey)) {
             return status;
         }
         if ("column.next".equals(columnKey)) {
@@ -593,10 +825,19 @@ public class BusinessFunctionPanel extends JPanel {
         return index < formValues.length ? formValue(formValues, index) : "";
     }
 
+    private int persistenceIndexForColumn(String columnKey, String[] persistenceKeys) {
+        for (int i = 0; i < persistenceKeys.length; i++) {
+            if (columnMatches(columnKey, persistenceKeys[i])) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private int fieldIndexForColumn(String columnKey) {
         String[] fieldKeys = definition.getFieldKeys();
         for (int i = 0; i < fieldKeys.length; i++) {
-            if (columnKey.equals(fieldKeys[i])) {
+            if (columnMatches(columnKey, fieldKeys[i])) {
                 return i;
             }
         }
@@ -634,6 +875,46 @@ public class BusinessFunctionPanel extends JPanel {
         return -1;
     }
 
+    private boolean columnMatches(String columnKey, String fieldKey) {
+        if (columnKey == null || fieldKey == null) {
+            return false;
+        }
+        if (columnKey.equals(fieldKey)) {
+            return true;
+        }
+        if ("column.id".equals(columnKey)) {
+            return "function.field.documentNo".equals(fieldKey) || "license.field.key".equals(fieldKey);
+        }
+        if ("column.date".equals(columnKey) || "column.due".equals(columnKey)) {
+            return "function.field.businessDate".equals(fieldKey) || "license.field.validFrom".equals(fieldKey);
+        }
+        if ("column.status".equals(columnKey)) {
+            return "function.field.status".equals(fieldKey);
+        }
+        if ("column.item".equals(columnKey)) {
+            return "function.field.item".equals(fieldKey);
+        }
+        if ("column.qty".equals(columnKey) || "column.amount".equals(columnKey)
+                || "column.demand".equals(columnKey) || "column.stock".equals(columnKey)
+                || "column.ordered".equals(columnKey) || "column.wip".equals(columnKey)
+                || "column.netDemand".equals(columnKey)) {
+            return "function.field.quantity".equals(fieldKey);
+        }
+        if ("column.customer".equals(columnKey) || "column.supplier".equals(columnKey)) {
+            return "function.field.partner".equals(fieldKey);
+        }
+        if ("column.warehouse".equals(columnKey) || "column.plant".equals(columnKey)) {
+            return "function.field.warehouse".equals(fieldKey);
+        }
+        if ("column.owner".equals(columnKey)) {
+            return "function.field.owner".equals(fieldKey);
+        }
+        if ("column.next".equals(columnKey)) {
+            return "function.field.memo".equals(fieldKey);
+        }
+        return false;
+    }
+
     private String currentStatusValue(String[] formValues) {
         String[] fieldKeys = definition.getFieldKeys();
         for (int i = 0; i < fieldKeys.length; i++) {
@@ -652,6 +933,21 @@ public class BusinessFunctionPanel extends JPanel {
         return values[index].trim();
     }
 
+    private String valueAt(String[] values, int index) {
+        if (values == null || index < 0 || index >= values.length || values[index] == null) {
+            return "";
+        }
+        return values[index];
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().length() == 0;
+    }
+
+    private boolean isInteger(String value) {
+        return value != null && value.trim().matches("\\d+");
+    }
+
     private String[] localized(String[] values) {
         String[] localized = new String[values.length];
         for (int i = 0; i < values.length; i++) {
@@ -660,20 +956,56 @@ public class BusinessFunctionPanel extends JPanel {
         return localized;
     }
 
-    private void writeCsvLine(Writer writer, String[] values) throws Exception {
-        for (int i = 0; i < values.length; i++) {
-            if (i > 0) {
-                writer.write(",");
-            }
-            String value = values[i] == null ? "" : values[i];
-            writer.write("\"" + value.replace("\"", "\"\"") + "\"");
-        }
-        writer.write(System.lineSeparator());
-    }
-
     private String displayRecordId(FunctionRecord record) {
         String[] values = record.getValues();
         return values.length == 0 || values[0] == null || values[0].trim().length() == 0 ? String.valueOf(record.getId()) : text(values[0]);
+    }
+
+    private String deleteSummary(FunctionRecord record) {
+        String[] values = recordValuesForDisplay(record, -1);
+        StringBuilder summary = new StringBuilder(displayRecordId(record));
+        for (int i = 1; i < values.length && i < 4; i++) {
+            if (values[i] != null && values[i].trim().length() > 0) {
+                summary.append(" / ").append(text(values[i]));
+            }
+        }
+        return summary.toString();
+    }
+
+    private long selectedRecordId() {
+        int row = selectedRow();
+        return row < 0 || row >= records.size() ? -1L : records.get(row).getId();
+    }
+
+    private void selectRecord(long preferredRecordId) {
+        if (records.isEmpty()) {
+            return;
+        }
+        int modelRow = 0;
+        if (preferredRecordId > 0) {
+            for (int i = 0; i < records.size(); i++) {
+                if (records.get(i).getId() == preferredRecordId) {
+                    modelRow = i;
+                    break;
+                }
+            }
+        }
+        int viewRow = table.convertRowIndexToView(modelRow);
+        if (viewRow >= 0 && viewRow < table.getRowCount()) {
+            table.setRowSelectionInterval(viewRow, viewRow);
+        } else if (table.getRowCount() > 0) {
+            table.setRowSelectionInterval(0, 0);
+        }
+    }
+
+    private String safeFilterSuffix() {
+        String filter = filterField == null ? "" : filterField.getText();
+        String status = statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString();
+        String raw = (filter == null ? "" : filter.trim()) + (status.length() == 0 ? "" : "-" + status.replace("status.", ""));
+        if (raw.trim().length() == 0) {
+            return "";
+        }
+        return raw.replaceAll("[^A-Za-z0-9_-]+", "_") + "-";
     }
 
     private String defaultDocumentNumber() {

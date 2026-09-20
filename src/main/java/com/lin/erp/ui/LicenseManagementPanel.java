@@ -12,6 +12,7 @@ import com.lin.erp.logging.AppLogger;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -28,6 +29,8 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Window;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.sql.SQLException;
 
 class LicenseManagementPanel extends JPanel {
@@ -37,6 +40,7 @@ class LicenseManagementPanel extends JPanel {
     private final RoleMenuPermission permission;
     private final JTextField licenseField = new JTextField("LINOVA-yyyyMMdd-signature");
     private final JLabel statusLabel = new JLabel();
+    private final JLabel detailLabel = new JLabel();
     private final DefaultTableModel tableModel;
 
     LicenseManagementPanel(Window owner, UserSession session, MenuNode function) {
@@ -82,11 +86,23 @@ class LicenseManagementPanel extends JPanel {
             registerButton.setToolTipText(t("message.permission.denied"));
         }
         input.add(registerButton);
+        JButton revokeButton = button("license.action.revoke", false);
+        revokeButton.setEnabled(permission.allows("action.edit"));
+        if (!revokeButton.isEnabled()) {
+            revokeButton.setToolTipText(t("message.permission.denied"));
+        }
+        input.add(revokeButton);
         panel.add(input, BorderLayout.WEST);
 
+        JPanel statusPanel = new JPanel(new GridLayout(2, 1, 0, 3));
+        statusPanel.setOpaque(false);
         statusLabel.setForeground(AppTheme.TEXT_PRIMARY);
         statusLabel.setFont(AppTheme.font(Font.BOLD, 12));
-        panel.add(statusLabel, BorderLayout.EAST);
+        detailLabel.setForeground(AppTheme.TEXT_MUTED);
+        detailLabel.setFont(AppTheme.font(Font.PLAIN, 11));
+        statusPanel.add(statusLabel);
+        statusPanel.add(detailLabel);
+        panel.add(statusPanel, BorderLayout.EAST);
         return panel;
     }
 
@@ -140,8 +156,10 @@ class LicenseManagementPanel extends JPanel {
         button.addActionListener(e -> {
             if ("action.refresh".equals(key)) {
                 reload();
-            } else {
+            } else if ("license.action.register".equals(key)) {
                 register();
+            } else {
+                revoke();
             }
         });
         return button;
@@ -162,12 +180,20 @@ class LicenseManagementPanel extends JPanel {
                 new BackgroundTasks.Success<LicenseStatus>() {
                     @Override
                     public void accept(LicenseStatus status) {
-                        String validUntil = status.getValidUntil() == null ? "" : status.getValidUntil().toString();
-                        statusLabel.setText(status.isValid() ? t("license.status.valid") + validUntil : t("license.status.invalid"));
+                        String validUntil = I18n.formatDate(session.getLanguage(), status.getValidUntil());
+                        statusLabel.setText(status.isValid()
+                                ? statusMark(true) + " " + t("license.status.valid") + validUntil
+                                : statusMark(false) + " " + t("license.status.invalid"));
+                        detailLabel.setText(detail(status));
                         tableModel.setDataVector(new String[][]{{
-                                status.getLicenseKey() == null ? "" : status.getLicenseKey(),
+                                maskLicenseKey(status.getLicenseKey()),
                                 validUntil,
-                                status.isValid() ? t("status.released") : t("status.cancelled")
+                                status.isValid() ? t("status.released") : t("status.cancelled"),
+                                status.getCustomerName(),
+                                status.getModules(),
+                                status.getSeatPolicy(),
+                                status.getRemainingDays() < 0 ? "" : String.valueOf(status.getRemainingDays()),
+                                status.getReasonCode()
                         }}, columns());
                     }
                 }
@@ -195,10 +221,41 @@ class LicenseManagementPanel extends JPanel {
                     @Override
                     public void accept(LicenseStatus status) {
                         if (!status.isValid()) {
-                            AppMessages.error(owner, t("message.error.title"), t("license.invalid"));
+                            AppMessages.error(owner, t("message.error.title"), t("license.invalid") + detailSuffix(status));
                             return;
                         }
-                        AppMessages.success(owner, t("license.register.success") + status.getValidUntil());
+                        AppMessages.success(owner, t("license.register.success")
+                                + I18n.formatDate(session.getLanguage(), status.getValidUntil()));
+                        reload();
+                    }
+                }
+        );
+    }
+
+    private void revoke() {
+        if (!permission.allows("action.edit")) {
+            AppMessages.error(owner, t("message.error.title"), t("message.permission.denied"));
+            return;
+        }
+        if (!confirm(t("license.revoke.confirm"))) {
+            return;
+        }
+        BackgroundTasks.run(
+                owner,
+                "License page revoke failed.",
+                t("message.error.title"),
+                t("license.revoke.failed"),
+                new BackgroundTasks.Work<Void>() {
+                    @Override
+                    public Void run() throws Exception {
+                        repository.revokeCurrentLicense(session.getUsername());
+                        return null;
+                    }
+                },
+                new BackgroundTasks.Success<Void>() {
+                    @Override
+                    public void accept(Void ignored) {
+                        AppMessages.success(owner, t("license.revoke.success"));
                         reload();
                     }
                 }
@@ -206,7 +263,107 @@ class LicenseManagementPanel extends JPanel {
     }
 
     private String[] columns() {
-        return new String[]{t("license.field.key"), t("license.field.validUntil"), t("column.status")};
+        return new String[]{t("license.field.key"), t("license.field.validUntil"), t("column.status"),
+                t("license.field.customer"), t("license.field.modules"), t("license.field.seatPolicy"),
+                t("license.field.remainingDays"), t("license.field.reason")};
+    }
+
+    private String detail(LicenseStatus status) {
+        StringBuilder builder = new StringBuilder();
+        append(builder, t("license.field.customer"), status.getCustomerName());
+        append(builder, t("license.field.modules"), status.getModules());
+        append(builder, t("license.field.seatPolicy"), status.getSeatPolicy());
+        if (status.isDeviceBindingEnabled()) {
+            append(builder, t("license.field.deviceBinding"), t("status.ready"));
+        }
+        if (builder.length() == 0 && status.getReasonCode().length() > 0) {
+            builder.append(status.getReasonCode());
+        }
+        return builder.toString();
+    }
+
+    private String detailSuffix(LicenseStatus status) {
+        if (status.getReasonCode().length() == 0) {
+            return "";
+        }
+        return " (" + status.getReasonCode() + ")";
+    }
+
+    private void append(StringBuilder builder, String label, String value) {
+        if (value == null || value.trim().length() == 0) {
+            return;
+        }
+        if (builder.length() > 0) {
+            builder.append(" | ");
+        }
+        builder.append(label).append(": ").append(value.trim());
+    }
+
+    private String maskLicenseKey(String key) {
+        if (key == null || key.trim().length() == 0) {
+            return "";
+        }
+        String value = key.trim();
+        if (value.length() <= 12) {
+            return "****";
+        }
+        return value.substring(0, 6) + "..." + value.substring(value.length() - 4);
+    }
+
+    private String statusMark(boolean valid) {
+        return valid ? "[OK]" : "[!]";
+    }
+
+    private boolean confirm(String messageText) {
+        final boolean[] result = new boolean[1];
+        final JDialog dialog = new JDialog(owner, t("dialog.confirm.title"), java.awt.Dialog.ModalityType.APPLICATION_MODAL);
+        JPanel root = new JPanel(new BorderLayout(0, 14));
+        root.setBackground(Color.WHITE);
+        root.setBorder(AppTheme.emptyBorder(18, 18, 18, 18));
+        JLabel message = new JLabel("<html>" + messageText + "</html>");
+        message.setForeground(AppTheme.TEXT_PRIMARY);
+        message.setFont(AppTheme.font(Font.PLAIN, 13));
+        root.add(message, BorderLayout.CENTER);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        actions.setOpaque(false);
+        JButton cancel = buttonBase(t("dialog.confirm.cancel"), false);
+        JButton ok = buttonBase(t("dialog.confirm.ok"), true);
+        cancel.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                dialog.dispose();
+            }
+        });
+        ok.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                result[0] = true;
+                dialog.dispose();
+            }
+        });
+        actions.add(cancel);
+        actions.add(ok);
+        root.add(actions, BorderLayout.SOUTH);
+        dialog.setContentPane(root);
+        dialog.getRootPane().setDefaultButton(ok);
+        dialog.pack();
+        dialog.setLocationRelativeTo(owner);
+        dialog.setVisible(true);
+        return result[0];
+    }
+
+    private JButton buttonBase(String text, boolean primary) {
+        JButton button = new JButton(text);
+        button.putClientProperty("JButton.buttonType", "roundRect");
+        button.putClientProperty("FlatLaf.style", "arc: 8; borderWidth: 1; focusWidth: 0");
+        button.setBackground(primary ? AppTheme.ACCENT : Color.WHITE);
+        button.setForeground(primary ? Color.WHITE : AppTheme.TEXT_PRIMARY);
+        button.setBorder(new CompoundBorder(
+                BorderFactory.createLineBorder(primary ? AppTheme.ACCENT : new Color(213, 222, 235)),
+                AppTheme.emptyBorder(8, 15, 8, 15)
+        ));
+        button.setFocusPainted(false);
+        return button;
     }
 
     private RoleMenuPermission loadPermission(MenuNode function) {

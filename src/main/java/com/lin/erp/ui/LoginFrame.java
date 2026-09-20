@@ -21,6 +21,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JScrollPane;
 import javax.swing.SwingWorker;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
@@ -101,7 +102,13 @@ public class LoginFrame extends JFrame {
         root.setBackground(AppTheme.PAGE_BACKGROUND);
         root.setBorder(AppTheme.emptyBorder(28, 28, 28, 28));
         root.add(createBrandPanel(), BorderLayout.CENTER);
-        root.add(createLoginPanel(), BorderLayout.EAST);
+        JScrollPane loginScroll = new JScrollPane(createLoginPanel());
+        loginScroll.setBorder(null);
+        loginScroll.setOpaque(false);
+        loginScroll.getViewport().setOpaque(false);
+        loginScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        loginScroll.getVerticalScrollBar().setUnitIncrement(18);
+        root.add(loginScroll, BorderLayout.EAST);
         return root;
     }
 
@@ -436,6 +443,7 @@ public class LoginFrame extends JFrame {
                     if (status.isValid()) {
                         AppLogger.userAction("LICENSE_VALID", "username=" + session.getUsername()
                                 + " | validUntil=" + status.getValidUntil());
+                        showExpiryWarning(status);
                         loadWorkspace(session);
                     } else {
                         promptAndRegisterLicense(session);
@@ -478,10 +486,11 @@ public class LoginFrame extends JFrame {
                         AppLogger.userAction("LICENSE_REGISTER_SUCCESS", "username=" + session.getUsername()
                                 + " | validUntil=" + registered.getValidUntil());
                         AppMessages.success(LoginFrame.this, I18n.t(language, "license.register.success")
-                                + registered.getValidUntil());
+                                + I18n.formatDate(language, registered.getValidUntil()));
                         loadWorkspace(session);
                     } else {
-                        AppMessages.error(LoginFrame.this, I18n.t(language, "message.error.title"), I18n.t(language, "license.invalid"));
+                        AppMessages.error(LoginFrame.this, I18n.t(language, "message.error.title"),
+                                I18n.t(language, "license.invalid") + licenseReason(registered));
                         promptAndRegisterLicense(session);
                     }
                 } catch (InterruptedException ex) {
@@ -574,6 +583,20 @@ public class LoginFrame extends JFrame {
             }
         };
         worker.execute();
+    }
+
+    private void showExpiryWarning(LicenseStatus status) {
+        long days = status.getRemainingDays();
+        if (days == 30 || days == 14 || (days >= 0 && days <= 7)) {
+            AppMessages.info(this, I18n.t(language, "license.expiry.warning") + days);
+        }
+    }
+
+    private String licenseReason(LicenseStatus status) {
+        if (status == null || status.getReasonCode().length() == 0) {
+            return "";
+        }
+        return " (" + status.getReasonCode() + ")";
     }
 
     private void showLicenseFailure(String message, Throwable throwable) {

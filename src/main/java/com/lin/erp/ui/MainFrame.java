@@ -20,14 +20,17 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.border.CompoundBorder;
@@ -45,10 +48,18 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
@@ -75,6 +86,7 @@ public class MainFrame extends JFrame {
     private final DbConfig dbConfig;
     private final Map<String, List<MenuNode>> childMenusByModule = new LinkedHashMap<String, List<MenuNode>>();
     private final Map<String, RoleMenuPermission> modulePermissions = new LinkedHashMap<String, RoleMenuPermission>();
+    private final Map<String, JFrame> functionWindows = new LinkedHashMap<String, JFrame>();
 
     private ModulePageData currentModule;
     private MenuNode currentSubMenu;
@@ -91,10 +103,12 @@ public class MainFrame extends JFrame {
     private JLabel companyLabel;
     private JLabel userLabel;
     private JLabel roleLabel;
+    private JLabel recentPageLabel;
     private JLabel periodLabel;
     private JTextField searchField;
     private JComboBox<Language> languageBox;
     private boolean refreshingLanguage;
+    private boolean searchPlaceholderVisible;
 
     public MainFrame(UserSession session) {
         this.session = session;
@@ -133,6 +147,7 @@ public class MainFrame extends JFrame {
         setLocationByPlatform(true);
         setContentPane(createContent());
         refreshTexts();
+        registerWorkspaceShortcuts();
         pack();
         setLocationRelativeTo(null);
     }
@@ -323,6 +338,16 @@ public class MainFrame extends JFrame {
                 "FINANCE_GL", "menu.finance.gl");
         addFallbackFunction("FINANCE", "FINANCE_CLOSE_AREA", "menu.area.finance.close", "FINANCE_PERIOD_SECTION", "menu.section.close",
                 "FINANCE_CLOSE", "menu.finance.close");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_SALES_DETAIL", "menu.report.salesDetail");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_PURCHASE_DETAIL", "menu.report.purchaseDetail");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_INVENTORY_DETAIL", "menu.report.inventoryDetail");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_AR_BALANCE", "menu.report.arBalance");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_AP_BALANCE", "menu.report.apBalance");
 
         addFallbackFunction("AI", "AI_COPILOT", "menu.area.ai.copilot", "AI_ASSIST_SECTION", "menu.section.aiAssist",
                 "AI_QUERY", "menu.ai.query");
@@ -482,7 +507,7 @@ public class MainFrame extends JFrame {
         }
         sidebar.add(menu, BorderLayout.CENTER);
 
-        JPanel userPanel = new JPanel(new GridLayout(0, 1, 0, 3));
+        JPanel userPanel = new JPanel(new GridLayout(0, 1, 0, 5));
         userPanel.setOpaque(true);
         userPanel.setBackground(new Color(55, 60, 68));
         userPanel.setBorder(AppTheme.emptyBorder(12, 12, 12, 12));
@@ -492,8 +517,27 @@ public class MainFrame extends JFrame {
         roleLabel = new JLabel();
         roleLabel.setForeground(new Color(188, 198, 214));
         roleLabel.setFont(AppTheme.font(Font.PLAIN, 12));
+        recentPageLabel = new JLabel();
+        recentPageLabel.setForeground(new Color(188, 198, 214));
+        recentPageLabel.setFont(AppTheme.font(Font.PLAIN, 11));
+        JButton logoutButton = new JButton(t("action.logout"));
+        logoutButton.putClientProperty("JButton.buttonType", "roundRect");
+        logoutButton.putClientProperty("FlatLaf.style", "arc: 8; borderWidth: 1; focusWidth: 1");
+        logoutButton.setBackground(new Color(70, 78, 90));
+        logoutButton.setForeground(Color.WHITE);
+        logoutButton.setFocusPainted(false);
+        logoutButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        logoutButton.setBorder(AppTheme.emptyBorder(7, 10, 7, 10));
+        logoutButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                logout();
+            }
+        });
         userPanel.add(userLabel);
         userPanel.add(roleLabel);
+        userPanel.add(recentPageLabel);
+        userPanel.add(logoutButton);
         sidebar.add(userPanel, BorderLayout.SOUTH);
 
         return sidebar;
@@ -514,6 +558,8 @@ public class MainFrame extends JFrame {
         button.setBorderPainted(false);
         button.setContentAreaFilled(true);
         button.setOpaque(true);
+        button.setIcon(moduleIcon(module));
+        button.setIconTextGap(8);
         button.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -528,6 +574,21 @@ public class MainFrame extends JFrame {
             }
         });
         return button;
+    }
+
+    private javax.swing.Icon moduleIcon(ModulePageData module) {
+        String code = module == null ? "" : module.getCode();
+        Color color = "DASHBOARD".equals(code) ? AppTheme.ACCENT
+                : "MASTER".equals(code) ? new Color(54, 126, 224)
+                : "PROCUREMENT".equals(code) ? new Color(22, 163, 74)
+                : "SALES".equals(code) ? new Color(236, 132, 31)
+                : "INVENTORY".equals(code) ? new Color(20, 184, 166)
+                : "MANUFACTURING".equals(code) ? new Color(139, 92, 246)
+                : "FINANCE".equals(code) ? new Color(15, 118, 110)
+                : "AI".equals(code) ? new Color(99, 102, 241)
+                : "ADMIN".equals(code) ? new Color(100, 116, 139)
+                : AppTheme.ACCENT;
+        return new ActionIcon("action.details", color);
     }
 
     private JPanel createWorkspace() {
@@ -574,7 +635,44 @@ public class MainFrame extends JFrame {
                 BorderFactory.createLineBorder(AppTheme.BORDER),
                 AppTheme.emptyBorder(0, 11, 0, 11)
         ));
+        searchField.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                if (searchPlaceholderVisible) {
+                    searchField.setText("");
+                    searchField.setForeground(AppTheme.TEXT_PRIMARY);
+                    searchPlaceholderVisible = false;
+                }
+            }
+
+            @Override
+            public void focusLost(FocusEvent e) {
+                applySearchPlaceholderIfEmpty();
+            }
+        });
+        searchField.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                runWorkspaceSearch();
+            }
+        });
         tools.add(searchField);
+
+        JButton searchButton = new JButton(t("function.search"));
+        searchButton.putClientProperty("JButton.buttonType", "roundRect");
+        searchButton.putClientProperty("FlatLaf.style", "arc: 10; borderWidth: 0; focusWidth: 1");
+        searchButton.setBackground(AppTheme.ACCENT);
+        searchButton.setForeground(Color.WHITE);
+        searchButton.setFocusPainted(false);
+        searchButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        searchButton.setBorder(AppTheme.emptyBorder(9, 14, 9, 14));
+        searchButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                runWorkspaceSearch();
+            }
+        });
+        tools.add(searchButton);
 
         languageBox = new JComboBox<Language>(Language.values());
         languageBox.setPreferredSize(new Dimension(124, 36));
@@ -622,9 +720,12 @@ public class MainFrame extends JFrame {
         brandTaglineLabel.setText(t("app.tagline"));
         companyLabel.setText(text(session.getCompanyNameKey()));
         periodLabel.setText(t("top.period"));
-        searchField.setText(t("top.search"));
+        applySearchPlaceholderIfEmpty();
         userLabel.setText(text(session.getDisplayNameKey()));
         roleLabel.setText(text(session.getRoleNameKey()));
+        if (recentPageLabel != null && recentPageLabel.getText().trim().length() == 0) {
+            recentPageLabel.setText(t("workspace.recent.none"));
+        }
 
         refreshingLanguage = true;
         languageBox.setSelectedItem(session.getLanguage());
@@ -648,6 +749,8 @@ public class MainFrame extends JFrame {
         for (JButton button : navButtons) {
             ModulePageData module = (ModulePageData) button.getClientProperty("module");
             button.setText(text(module.getTitleKey()));
+            button.setIcon(moduleIcon(module));
+            button.setIconTextGap(8);
             styleNavButton(button, module == currentModule);
         }
 
@@ -679,6 +782,155 @@ public class MainFrame extends JFrame {
             button.setForeground(new Color(218, 226, 238));
             button.setFont(AppTheme.font(Font.PLAIN, 13));
         }
+    }
+
+    private void applySearchPlaceholderIfEmpty() {
+        if (searchField == null) {
+            return;
+        }
+        String value = searchField.getText();
+        if (value == null || value.trim().length() == 0 || searchPlaceholderVisible) {
+            searchPlaceholderVisible = true;
+            searchField.setForeground(AppTheme.TEXT_MUTED);
+            searchField.setText(t("top.search"));
+        }
+    }
+
+    private String searchQuery() {
+        if (searchField == null || searchPlaceholderVisible) {
+            return "";
+        }
+        String value = searchField.getText();
+        return value == null ? "" : value.trim().toLowerCase(I18n.locale(session.getLanguage()));
+    }
+
+    private void runWorkspaceSearch() {
+        String query = searchQuery();
+        if (query.length() == 0) {
+            searchField.requestFocusInWindow();
+            return;
+        }
+        for (ModulePageData module : modules) {
+            if (matches(query, text(module.getTitleKey())) || matches(query, text(module.getSubtitleKey()))) {
+                showModule(module);
+                AppMessages.info(this, t("message.search.matched") + text(module.getTitleKey()));
+                return;
+            }
+            MenuNode match = findMenuMatch(module, query);
+            if (match != null) {
+                currentModule = module;
+                currentSubMenu = firstVisibleSubMenu(module);
+                refreshTexts();
+                openFunctionWindow(match);
+                AppMessages.info(this, t("message.search.matched") + text(match.getNameKey()));
+                return;
+            }
+            if (matchesTable(query, module)) {
+                showModule(module);
+                AppMessages.info(this, t("message.search.matched") + text(module.getTableTitleKey()));
+                return;
+            }
+        }
+        AppMessages.info(this, t("message.search.none"));
+    }
+
+    private boolean matches(String query, String value) {
+        return value != null && value.toLowerCase(I18n.locale(session.getLanguage())).contains(query);
+    }
+
+    private MenuNode findMenuMatch(ModulePageData module, String query) {
+        List<MenuNode> children = module == null ? null : childMenusByModule.get(module.getCode());
+        if (children == null) {
+            return null;
+        }
+        for (MenuNode area : children) {
+            MenuNode match = findMenuMatch(area, query);
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
+    }
+
+    private MenuNode findMenuMatch(MenuNode node, String query) {
+        if (matches(query, text(node.getNameKey())) && !node.hasChildren()) {
+            return node;
+        }
+        for (MenuNode child : node.getChildren()) {
+            MenuNode match = findMenuMatch(child, query);
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
+    }
+
+    private boolean matchesTable(String query, ModulePageData module) {
+        if (module == null) {
+            return false;
+        }
+        for (String column : module.getTableColumns()) {
+            if (matches(query, text(column))) {
+                return true;
+            }
+        }
+        for (String[] row : module.getTableRows()) {
+            for (String value : row) {
+                if (matches(query, text(value))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void showModule(ModulePageData module) {
+        currentModule = module;
+        currentSubMenu = firstVisibleSubMenu(module);
+        refreshTexts();
+    }
+
+    private void registerWorkspaceShortcuts() {
+        JComponent root = getRootPane();
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK), "focusSearch");
+        root.getActionMap().put("focusSearch", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                searchPlaceholderVisible = true;
+                searchField.requestFocusInWindow();
+            }
+        });
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK), "refresh");
+        root.getActionMap().put("refresh", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleToolbarAction("action.refresh");
+            }
+        });
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_E, InputEvent.CTRL_DOWN_MASK), "export");
+        root.getActionMap().put("export", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleToolbarAction("action.export");
+            }
+        });
+        root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK), "logout");
+        root.getActionMap().put("logout", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                logout();
+            }
+        });
+    }
+
+    private void logout() {
+        logUserAction("LOGOUT", "user=" + session.getUsername());
+        for (JFrame window : new ArrayList<JFrame>(functionWindows.values())) {
+            window.dispose();
+        }
+        functionWindows.clear();
+        new LoginFrame(new com.lin.erp.auth.AuthService()).setVisible(true);
+        dispose();
     }
 
     private MenuNode firstVisibleSubMenu(ModulePageData module) {
@@ -869,8 +1121,8 @@ public class MainFrame extends JFrame {
     private JButton createFunctionButton(final MenuNode function) {
         JButton button = new JButton(text(function.getNameKey()));
         button.setHorizontalAlignment(SwingConstants.CENTER);
-        button.setPreferredSize(new Dimension(210, 34));
-        button.setMinimumSize(new Dimension(170, 34));
+        button.setPreferredSize(new Dimension(210, 40));
+        button.setMinimumSize(new Dimension(170, 40));
         button.putClientProperty("JButton.buttonType", "roundRect");
         button.putClientProperty("FlatLaf.style", "arc: 4; borderWidth: 1; focusWidth: 1");
         button.setBackground(new Color(229, 232, 238));
@@ -880,7 +1132,7 @@ public class MainFrame extends JFrame {
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.setBorder(new CompoundBorder(
                 BorderFactory.createLineBorder(new Color(207, 214, 224)),
-                AppTheme.emptyBorder(7, 8, 7, 8)
+                AppTheme.emptyBorder(9, 8, 9, 8)
         ));
         button.addActionListener(new ActionListener() {
             @Override
@@ -895,6 +1147,14 @@ public class MainFrame extends JFrame {
         logUserAction("FUNCTION_CLICK", "submenu=" + (currentSubMenu == null ? "NONE" : currentSubMenu.getCode())
                 + " | function=" + function.getCode()
                 + " | functionName=" + english(function.getNameKey()));
+        JFrame existing = functionWindows.get(function.getCode());
+        if (existing != null && existing.isDisplayable()) {
+            existing.toFront();
+            existing.requestFocus();
+            existing.setState(JFrame.NORMAL);
+            logUserAction("FUNCTION_WINDOW_FOCUS", "function=" + function.getCode());
+            return;
+        }
         if (!functionPermission(function).allows("action.refresh")) {
             logUserAction("FUNCTION_OPEN_DENIED", "function=" + function.getCode());
             AppMessages.error(this, t("message.error.title"), t("message.permission.denied"));
@@ -906,6 +1166,16 @@ public class MainFrame extends JFrame {
         window.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         window.setMinimumSize(new Dimension(1080, 660));
         window.setPreferredSize(new Dimension(1180, 720));
+        window.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                functionWindows.remove(function.getCode());
+                if (recentPageLabel != null) {
+                    recentPageLabel.setText(t("workspace.recent") + text(function.getNameKey()));
+                }
+                logUserAction("FUNCTION_WINDOW_CLOSE", "function=" + function.getCode());
+            }
+        });
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(AppTheme.PAGE_BACKGROUND);
@@ -922,6 +1192,7 @@ public class MainFrame extends JFrame {
         root.add(body, BorderLayout.CENTER);
 
         window.setContentPane(root);
+        functionWindows.put(function.getCode(), window);
         window.pack();
         window.setLocationRelativeTo(this);
         window.setVisible(true);
@@ -939,11 +1210,20 @@ public class MainFrame extends JFrame {
         brand.setFont(AppTheme.font(Font.BOLD, 18));
         header.add(brand, BorderLayout.WEST);
 
-        JLabel title = new JLabel(text(function.getNameKey()), SwingConstants.RIGHT);
+        JLabel title = new JLabel("<html><div style='text-align:right'>"
+                + text(function.getNameKey()) + "<br><span style='font-size:10px;color:#b7c2d4'>"
+                + breadcrumb(function) + "</span></div></html>", SwingConstants.RIGHT);
         title.setForeground(new Color(218, 226, 238));
         title.setFont(AppTheme.font(Font.BOLD, 13));
         header.add(title, BorderLayout.EAST);
         return header;
+    }
+
+    private String breadcrumb(MenuNode function) {
+        String module = currentModule == null ? "" : text(currentModule.getTitleKey());
+        String area = currentSubMenu == null ? "" : text(currentSubMenu.getNameKey());
+        String page = function == null ? "" : text(function.getNameKey());
+        return module + " / " + area + " / " + page;
     }
 
     private JPanel createTransactionFunctionPanel(final JFrame window, final MenuNode function) {
@@ -1474,136 +1754,78 @@ public class MainFrame extends JFrame {
     }
 
     private void runStatusAction(String actionKey) {
-        if (!hasEditableTable()) {
-            logUserAction("WORKFLOW_ACTION_BLOCKED", "action=" + actionKey + " | reason=noEditableTable");
-            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
-            return;
-        }
-        int modelRow = selectedModelRow();
-        if (modelRow < 0) {
-            logUserAction("WORKFLOW_ACTION_BLOCKED", "action=" + actionKey + " | reason=noSelectedRow");
-            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
-            return;
-        }
-
-        int statusColumnIndex = findColumnIndex(currentModule, "column.status");
-        if (statusColumnIndex < 0) {
-            logUserAction("WORKFLOW_ACTION_BLOCKED", "action=" + actionKey + " | reason=noStatusColumn");
-            AppMessages.error(this, t("message.error.title"), t("message.no.status"));
-            return;
-        }
-
-        String targetStatus = targetStatusFor(actionKey);
-        if (!confirmStatusAction(actionKey, modelRow, targetStatus)) {
-            logUserAction("WORKFLOW_ACTION_CANCEL", "action=" + actionKey
-                    + " | row=" + modelRow
-                    + " | record=" + selectedRecordName(modelRow)
-                    + " | targetStatus=" + english(targetStatus));
-            return;
-        }
-
-        final ModulePageData targetModule = currentModule;
-        final int targetRow = modelRow;
-        BackgroundTasks.run(
-                this,
-                "Status update failed.",
-                t("message.error.title"),
-                t("message.status.failed"),
-                new BackgroundTasks.Work<List<ModulePageData>>() {
-                    @Override
-                    public List<ModulePageData> run() throws Exception {
-                        int sortOrder = targetModule.getTableRowSortOrders().get(targetRow).intValue();
-                        logUserAction("WORKFLOW_ACTION_SUBMIT", "action=" + actionKey
-                                + " | sortOrder=" + sortOrder
-                                + " | record=" + selectedRecordName(targetRow)
-                                + " | targetStatus=" + english(targetStatus));
-                        moduleRepository.updateTableRowStatus(targetModule.getCode(), sortOrder, statusColumnIndex, targetStatus);
-                        AppLogger.info("Updated ERP row status. Module: " + targetModule.getCode()
-                                + ", sortOrder: " + sortOrder + ", status: " + targetStatus);
-                        return moduleRepository.loadModules();
-                    }
-                },
-                new BackgroundTasks.Success<List<ModulePageData>>() {
-                    @Override
-                    public void accept(List<ModulePageData> reloaded) {
-                        applyReloadedModules(targetModule.getCode(), reloaded);
-                        refreshTexts();
-                        logUserAction("WORKFLOW_ACTION_SUCCESS", "action=" + actionKey
-                                + " | row=" + targetRow
-                                + " | targetStatus=" + english(targetStatus));
-                        AppMessages.success(MainFrame.this, successMessageFor(actionKey));
-                    }
-                }
-        );
+        logUserAction("WORKFLOW_ACTION_BLOCKED", "action=" + actionKey + " | reason=moduleProjectionOnly");
+        AppMessages.error(this, t("message.error.title"),
+                "This dashboard row is a projection. Open the matching business function to release, approve, or post with inventory, finance, and audit checks.");
     }
 
     private void exportCurrentTable() {
-        logUserAction("EXPORT_START", "format=csv");
         if (currentModule == null || currentModule.getTableColumns().isEmpty()) {
             logUserAction("EXPORT_FAILURE", "reason=noTable");
             AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
             return;
         }
-
-        File exportDir = new File("exports");
-        if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
-            logUserAction("EXPORT_FAILURE", "reason=cannotCreateExportDirectory");
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
+        final ReportExportSupport.Format format = ReportExportSupport.chooseFormat(this);
+        if (format == null) {
             return;
         }
-
-        String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
-        File file = new File(exportDir, currentModule.getCode().toLowerCase() + "-" + timestamp + ".csv");
-        Writer writer = null;
-        try {
-            writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
-            writer.write('\ufeff');
-            writeCsvLine(writer, localized(currentModule.getTableColumns()));
-            String[][] rows = localizedRows(currentModule);
-            for (int i = 0; i < rows.length; i++) {
-                writeCsvLine(writer, rows[i]);
-            }
-            AppLogger.info("Exported ERP table. Module: " + currentModule.getCode() + ", file: " + file.getAbsolutePath());
-            logUserAction("EXPORT_SUCCESS", "file=" + file.getAbsolutePath() + " | rows=" + currentModule.getTableRows().size());
-            AppMessages.success(this, t("message.export.success") + file.getAbsolutePath());
-        } catch (Exception e) {
-            AppLogger.error("Export failed.", e);
-            logUserAction("EXPORT_FAILURE", "errorType=" + e.getClass().getSimpleName());
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (Exception ignored) {
-                    // Nothing else to do if the export stream fails while closing.
+        final ModulePageData module = currentModule;
+        final ReportExportSupport.Snapshot snapshot = new ReportExportSupport.Snapshot(
+                text(module.getTitleKey()),
+                module.getCode().toLowerCase(),
+                session.getUsername(),
+                "Module=" + module.getCode(),
+                localized(module.getTableColumns()),
+                localizedRows(module)
+        );
+        logUserAction("EXPORT_START", "format=" + format.name() + " | filters=Module=" + module.getCode());
+        BackgroundTasks.run(
+                this,
+                "Export failed.",
+                t("message.error.title"),
+                t("message.export.failed"),
+                new BackgroundTasks.Work<File>() {
+                    @Override
+                    public File run() throws Exception {
+                        return ReportExportSupport.export(snapshot, format);
+                    }
+                },
+                new BackgroundTasks.Success<File>() {
+                    @Override
+                    public void accept(File file) {
+                        AppLogger.info("Exported ERP table. Module: " + module.getCode() + ", file: " + file.getAbsolutePath());
+                        logUserAction("EXPORT_SUCCESS", "format=" + format.name()
+                                + " | file=" + file.getAbsolutePath() + " | rows=" + snapshot.rowCount());
+                        AppMessages.success(MainFrame.this, t("message.export.success") + file.getAbsolutePath());
+                    }
                 }
-            }
-        }
+        );
     }
 
     private void showSimulationResult() {
         logUserAction("SIMULATION_RUN", "pageTitle=" + english(currentModule.getTitleKey()));
-        JOptionPane.showMessageDialog(
+        AppMessages.information(
                 this,
-                t("dialog.simulate.body"),
                 t("dialog.simulate.title"),
-                JOptionPane.INFORMATION_MESSAGE
+                t("dialog.simulate.body"),
+                t("dialog.confirm.ok")
         );
         AppMessages.info(this, t("message.operation.success"));
     }
 
     private void askAiAssistant() {
-        String prompt = JOptionPane.showInputDialog(this, text(currentModule.getPromptValue()), t("action.ask"));
+        String prompt = AppMessages.input(this, t("action.ask"), text(currentModule.getPromptValue()),
+                t("dialog.confirm.ok"), t("dialog.confirm.cancel"));
         if (prompt == null || prompt.trim().length() == 0) {
             logUserAction("AI_ASK_CANCEL", "reason=emptyPrompt");
             return;
         }
         logUserAction("AI_ASK_SUBMIT", "promptLength=" + prompt.trim().length());
-        JOptionPane.showMessageDialog(
+        AppMessages.information(
                 this,
-                text("ai.answer"),
                 text(currentModule.getTitleKey()),
-                JOptionPane.INFORMATION_MESSAGE
+                text("ai.answer"),
+                t("dialog.confirm.ok")
         );
     }
 
@@ -1725,18 +1947,20 @@ public class MainFrame extends JFrame {
                 + " | record=" + selectedRecordName(modelRow)
                 + " | targetStatus=" + english(targetStatus));
 
-        Object[] options = new Object[]{t("dialog.confirm.ok"), t("dialog.confirm.cancel")};
-        int result = JOptionPane.showOptionDialog(
+        boolean confirmed = AppMessages.confirm(
                 this,
-                panel,
                 t("dialog.confirm.title"),
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.QUESTION_MESSAGE,
-                null,
-                options,
-                options[0]
+                confirmText(actionKey, modelRow, targetStatus),
+                t("dialog.confirm.ok"),
+                t("dialog.confirm.cancel")
         );
-        return result == 0;
+        return confirmed;
+    }
+
+    private String confirmText(String actionKey, int modelRow, String targetStatus) {
+        return t("dialog.confirm.action") + ": " + text(actionKey)
+                + "\n" + t("dialog.confirm.record") + ": " + selectedRecordName(modelRow)
+                + "\n" + t("dialog.confirm.status") + ": " + text(targetStatus);
     }
 
     private String selectedRecordName(int modelRow) {
@@ -1776,7 +2000,15 @@ public class MainFrame extends JFrame {
     }
 
     private JPanel createMetricCard(ModulePageData.Metric metric) {
+        final ModulePageData.Metric currentMetric = metric;
         RoundedPanel card = createCard(text(metric.getLabelValue()));
+        card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        card.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                drillIntoMetric(currentMetric);
+            }
+        });
         JLabel valueLabel = new JLabel(metric.getMetricValue());
         valueLabel.setForeground(colorFor(metric.getAccentCode()));
         valueLabel.setFont(AppTheme.font(Font.BOLD, 32));
@@ -1792,6 +2024,61 @@ public class MainFrame extends JFrame {
         }
         card.add(content, BorderLayout.CENTER);
         return card;
+    }
+
+    private void drillIntoMetric(ModulePageData.Metric metric) {
+        String text = (text(metric.getLabelValue()) + " " + text(metric.getNoteValue())).toLowerCase(I18n.locale(session.getLanguage()));
+        String reportCode = text.contains("stock") || text.contains("inventory") || text.contains("库存") || text.contains("在庫")
+                ? "REPORT_INVENTORY_DETAIL"
+                : text.contains("purchase") || text.contains("采购") || text.contains("購買")
+                ? "REPORT_PURCHASE_DETAIL"
+                : text.contains("sales") || text.contains("销售") || text.contains("販売")
+                ? "REPORT_SALES_DETAIL"
+                : text.contains("payable") || text.contains("ap") || text.contains("应付") || text.contains("買掛")
+                ? "REPORT_AP_BALANCE"
+                : text.contains("finance") || text.contains("cash") || text.contains("receivable") || text.contains("财务") || text.contains("会計")
+                ? "REPORT_AR_BALANCE"
+                : null;
+        MenuNode report = reportCode == null ? null : findMenuByCode(reportCode);
+        if (report != null) {
+            openFunctionWindow(report);
+            AppMessages.info(this, t("message.drilldown.opened") + text(report.getNameKey()));
+            return;
+        }
+        String target = reportCode == null ? "DASHBOARD" : "REPORTS";
+        ModulePageData module = findModule(target);
+        if (module != null) {
+            showModule(module);
+            AppMessages.info(this, t("message.drilldown.opened") + text(module.getTitleKey()));
+        }
+    }
+
+    private MenuNode findMenuByCode(String code) {
+        for (List<MenuNode> roots : childMenusByModule.values()) {
+            for (MenuNode root : roots) {
+                MenuNode match = findMenuByCode(root, code);
+                if (match != null) {
+                    return match;
+                }
+            }
+        }
+        return null;
+    }
+
+    private MenuNode findMenuByCode(MenuNode node, String code) {
+        if (node == null) {
+            return null;
+        }
+        if (code.equals(node.getCode())) {
+            return node;
+        }
+        for (MenuNode child : node.getChildren()) {
+            MenuNode match = findMenuByCode(child, code);
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
     }
 
     private RoundedPanel createTablePanel(final ModulePageData data, String title, String[] columns, String[][] rows) {
@@ -1811,12 +2098,17 @@ public class MainFrame extends JFrame {
         table.setForeground(AppTheme.TEXT_PRIMARY);
         table.setGridColor(new Color(238, 243, 249));
         table.setShowVerticalLines(false);
-        table.setSelectionBackground(AppTheme.ACCENT_SOFT);
-        table.setSelectionForeground(AppTheme.TEXT_PRIMARY);
+        table.setSelectionBackground(new Color(194, 238, 229));
+        table.setSelectionForeground(new Color(18, 84, 80));
         table.setBackground(Color.WHITE);
+        table.setComponentPopupMenu(createTablePopup(table));
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    selectPopupRow(table, e);
+                    return;
+                }
                 if (e.getClickCount() == 2 && "OPERATIONAL".equals(data.getPageType())) {
                     int row = selectedModelRow();
                     logUserAction("TABLE_ROW_DOUBLE_CLICK", "row=" + row
@@ -1824,6 +2116,20 @@ public class MainFrame extends JFrame {
                     if (ensureToolbarActionAllowed("action.edit")) {
                         openRecordForm(true);
                     }
+                }
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    selectPopupRow(table, e);
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    selectPopupRow(table, e);
                 }
             }
         });
@@ -1835,7 +2141,112 @@ public class MainFrame extends JFrame {
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBorder(BorderFactory.createLineBorder(AppTheme.BORDER));
         card.add(scrollPane, BorderLayout.CENTER);
+        JLabel footer = new JLabel(rows.length == 0 ? t("table.empty") : t("table.rows") + rows.length);
+        footer.setForeground(AppTheme.TEXT_MUTED);
+        footer.setFont(AppTheme.font(Font.PLAIN, 11));
+        card.add(footer, BorderLayout.SOUTH);
         return card;
+    }
+
+    private JPopupMenu createTablePopup(final JTable table) {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem copy = new JMenuItem(t("table.menu.copyCell"));
+        copy.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                copySelectedCell(table);
+            }
+        });
+        JMenuItem exportRow = new JMenuItem(t("table.menu.exportRow"));
+        exportRow.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                exportSelectedRow(table);
+            }
+        });
+        JMenuItem details = new JMenuItem(t("table.menu.details"));
+        details.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (selectedModelRow() >= 0 && ensureToolbarActionAllowed("action.edit")) {
+                    openRecordForm(true);
+                }
+            }
+        });
+        menu.add(copy);
+        menu.add(exportRow);
+        menu.add(details);
+        return menu;
+    }
+
+    private void selectPopupRow(JTable table, MouseEvent event) {
+        int row = table.rowAtPoint(event.getPoint());
+        int column = table.columnAtPoint(event.getPoint());
+        if (row >= 0) {
+            table.setRowSelectionInterval(row, row);
+        }
+        if (column >= 0) {
+            table.setColumnSelectionInterval(column, column);
+        }
+    }
+
+    private void copySelectedCell(JTable table) {
+        int row = table.getSelectedRow();
+        int column = table.getSelectedColumn();
+        if (row < 0 || column < 0) {
+            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
+            return;
+        }
+        Object value = table.getValueAt(row, column);
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(value == null ? "" : value.toString()), null);
+        AppMessages.info(this, t("message.copy.done"));
+    }
+
+    private void exportSelectedRow(JTable table) {
+        int row = table.getSelectedRow();
+        if (row < 0) {
+            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
+            return;
+        }
+        final ReportExportSupport.Format format = ReportExportSupport.chooseFormat(this);
+        if (format == null) {
+            return;
+        }
+        String[] headers = new String[table.getColumnCount()];
+        String[] values = new String[table.getColumnCount()];
+        for (int i = 0; i < table.getColumnCount(); i++) {
+            headers[i] = table.getColumnName(i);
+            Object value = table.getValueAt(row, i);
+            values[i] = value == null ? "" : value.toString();
+        }
+        final ReportExportSupport.Snapshot snapshot = new ReportExportSupport.Snapshot(
+                currentModule == null ? "Selected row" : text(currentModule.getTitleKey()),
+                "selected-row",
+                session.getUsername(),
+                "Selected row=" + row,
+                headers,
+                new String[][]{values}
+        );
+        logUserAction("EXPORT_ROW_START", "format=" + format.name() + " | row=" + row);
+        BackgroundTasks.run(
+                this,
+                "Selected row export failed.",
+                t("message.error.title"),
+                t("message.export.failed"),
+                new BackgroundTasks.Work<File>() {
+                    @Override
+                    public File run() throws Exception {
+                        return ReportExportSupport.export(snapshot, format);
+                    }
+                },
+                new BackgroundTasks.Success<File>() {
+                    @Override
+                    public void accept(File file) {
+                        logUserAction("EXPORT_ROW_SUCCESS", "format=" + format.name() + " | file=" + file.getAbsolutePath());
+                        AppMessages.success(MainFrame.this, t("message.export.success") + file.getAbsolutePath());
+                    }
+                }
+        );
     }
 
     private JPanel createProcessPanel(String title, String[] steps) {

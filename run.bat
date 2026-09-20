@@ -56,7 +56,29 @@ if not exist "%APP_JAR%" (
   set "NEED_BUILD=1"
 )
 
+if "%NEED_BUILD%"=="0" (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$jar=(Get-Item -LiteralPath '%APP_JAR%').LastWriteTimeUtc; $paths=@('pom.xml','src','config\*.example'); $newer=Get-ChildItem -Path $paths -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTimeUtc -gt $jar } | Select-Object -First 1; if ($newer) { exit 2 } else { exit 0 }"
+  if errorlevel 2 (
+    echo Source files changed after the application jar was built. Rebuilding it now...
+    set "NEED_BUILD=1"
+  ) else if errorlevel 1 (
+    echo [WARN] Source freshness check failed. Continuing with existing jar.
+  )
+)
+
 if "%NEED_BUILD%"=="1" (
+  if /i "%~1"=="--compile-only" (
+    if exist "scripts\check-encoding.ps1" (
+      powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\check-encoding.ps1"
+      if errorlevel 1 (
+        echo.
+        echo [ERROR] Encoding check failed.
+        exit /b 1
+      )
+    )
+  )
+
   where mvn >nul 2>nul
   if errorlevel 1 (
     echo [ERROR] Apache Maven was not found.

@@ -12,16 +12,21 @@ import com.lin.erp.logging.AppLogger;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.RowFilter;
 import javax.swing.SwingConstants;
 import javax.swing.border.CompoundBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
+import javax.swing.table.TableRowSorter;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
@@ -34,11 +39,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -59,6 +59,9 @@ public class ItemMasterPanel extends JPanel {
 
     private JTable table;
     private DefaultTableModel tableModel;
+    private TableRowSorter<DefaultTableModel> tableSorter;
+    private JTextField filterField;
+    private JComboBox<String> statusFilter;
     private JLabel countLabel;
     private JLabel totalItemsLabel;
     private JLabel releasedItemsLabel;
@@ -95,6 +98,45 @@ public class ItemMasterPanel extends JPanel {
 
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
+        filterField = new JTextField(18);
+        filterField.putClientProperty("JTextField.placeholderText", "Filter");
+        filterField.setBorder(AppTheme.emptyBorder(8, 10, 8, 10));
+        filterField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+        });
+        actions.add(filterField);
+        statusFilter = new JComboBox<String>(new String[]{"", "status.open", "status.released", "status.ready", "status.cancelled"});
+        statusFilter.setPreferredSize(new Dimension(150, 34));
+        statusFilter.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index,
+                                                                  boolean isSelected, boolean cellHasFocus) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                String text = value == null ? "" : value.toString();
+                label.setText(text.length() == 0 ? "All status" : I18n.textOrValue(session.getLanguage(), text));
+                return label;
+            }
+        });
+        statusFilter.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyFilter();
+            }
+        });
+        actions.add(statusFilter);
         actions.add(createActionButton("action.new", "action.new"));
         actions.add(createActionButton("action.edit", "action.edit"));
         actions.add(createActionButton("action.delete", "action.delete"));
@@ -157,6 +199,8 @@ public class ItemMasterPanel extends JPanel {
             }
         };
         table = new JTable(tableModel);
+        tableSorter = new TableRowSorter<DefaultTableModel>(tableModel);
+        table.setRowSorter(tableSorter);
         table.setRowHeight(34);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setFillsViewportHeight(true);
@@ -177,7 +221,7 @@ public class ItemMasterPanel extends JPanel {
             }
         });
         JTableHeader header = table.getTableHeader();
-        header.setReorderingAllowed(false);
+        header.setReorderingAllowed(true);
         header.setBackground(new Color(248, 250, 252));
         header.setForeground(AppTheme.TEXT_MUTED);
         header.setFont(AppTheme.font(Font.BOLD, 11));
@@ -310,6 +354,7 @@ public class ItemMasterPanel extends JPanel {
         }
 
         final ItemMasterRecord selectedRecord = selected;
+        final String[] savedItemCode = new String[]{record.getItemCode()};
         BackgroundTasks.run(
                 this,
                 "Item master save failed.",
@@ -332,7 +377,7 @@ public class ItemMasterPanel extends JPanel {
                         AppMessages.success(ItemMasterPanel.this, editMode ? t("message.edit.success") : t("message.create.success"));
                         logAction("ITEM_SAVE_SUCCESS", "mode=" + (editMode ? "EDIT" : "CREATE")
                                 + " | itemCode=" + record.getItemCode());
-                        reload();
+                        reload(savedItemCode[0]);
                     }
                 }
         );
@@ -347,14 +392,14 @@ public class ItemMasterPanel extends JPanel {
         }
 
         ItemMasterRecord record = records.get(row);
-        int result = JOptionPane.showConfirmDialog(
+        boolean confirmed = AppMessages.confirm(
                 this,
-                t("message.delete.confirm") + " " + record.getItemCode() + " ?",
                 t("dialog.confirm.title"),
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.WARNING_MESSAGE
+                t("message.delete.confirm") + " " + record.getItemCode() + " / " + record.getItemName() + " / " + I18n.textOrValue(session.getLanguage(), record.getStatus()) + " ?",
+                t("dialog.confirm.ok"),
+                t("dialog.confirm.cancel")
         );
-        if (result != JOptionPane.OK_OPTION) {
+        if (!confirmed) {
             logAction("ITEM_DELETE_CANCEL", "itemCode=" + record.getItemCode());
             return;
         }
@@ -383,6 +428,10 @@ public class ItemMasterPanel extends JPanel {
     }
 
     private void reload() {
+        reload(selectedItemCode());
+    }
+
+    private void reload(final String preferredItemCode) {
         BackgroundTasks.run(
                 this,
                 "Item master load failed.",
@@ -399,7 +448,7 @@ public class ItemMasterPanel extends JPanel {
                     public void accept(List<ItemMasterRecord> loaded) {
                         records.clear();
                         records.addAll(loaded);
-                        rebuildTable();
+                        rebuildTable(preferredItemCode);
                         AppMessages.info(ItemMasterPanel.this, t("message.refresh.done"));
                         logAction("ITEM_PAGE_REFRESH_SUCCESS", "rows=" + records.size());
                     }
@@ -407,9 +456,13 @@ public class ItemMasterPanel extends JPanel {
         );
     }
 
-    private void rebuildTable() {
+    private void rebuildTable(String preferredItemCode) {
         tableModel.setDataVector(localizedRows(), localizedColumns());
+        tableSorter.setModel(tableModel);
+        TableColumnPreferences.install(table, "item-master." + session.getLanguage().name());
+        applyFilter();
         countLabel.setText(t("item.count.prefix") + records.size());
+        selectItem(preferredItemCode);
         if (totalItemsLabel != null) {
             totalItemsLabel.setText(String.valueOf(records.size()));
             releasedItemsLabel.setText(String.valueOf(countStatus("status.released")));
@@ -428,38 +481,38 @@ public class ItemMasterPanel extends JPanel {
     }
 
     private void export() {
-        File exportDir = new File("exports");
-        if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
-            logAction("ITEM_EXPORT_FAILURE", "reason=cannotCreateExportDirectory");
+        final ReportExportSupport.Format format = ReportExportSupport.chooseFormat(this);
+        if (format == null) {
             return;
         }
-
-        File file = new File(exportDir, "item-master-" + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".csv");
-        Writer writer = null;
-        try {
-            writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
-            writer.write('\ufeff');
-            writeCsvLine(writer, localizedColumns());
-            String[][] rows = localizedRows();
-            for (int i = 0; i < rows.length; i++) {
-                writeCsvLine(writer, rows[i]);
-            }
-            AppMessages.success(this, t("message.export.success") + file.getAbsolutePath());
-            logAction("ITEM_EXPORT_SUCCESS", "file=" + file.getAbsolutePath() + " | rows=" + records.size());
-        } catch (Exception e) {
-            AppLogger.error("Item master export failed.", e);
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
-            logAction("ITEM_EXPORT_FAILURE", "errorType=" + e.getClass().getSimpleName());
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (Exception ignored) {
-                    // Export already finished or failed; close errors are not actionable for the user.
+        final ReportExportSupport.Snapshot snapshot = ReportExportSupport.snapshot(
+                t("menu.master.item"),
+                "item-master-" + safeFilterSuffix(),
+                session,
+                filterSummary(),
+                table
+        );
+        logAction("ITEM_EXPORT_START", "format=" + format.name() + " | filters=" + filterSummary());
+        BackgroundTasks.run(
+                this,
+                "Item master export failed.",
+                t("message.error.title"),
+                t("message.export.failed"),
+                new BackgroundTasks.Work<java.io.File>() {
+                    @Override
+                    public java.io.File run() throws Exception {
+                        return ReportExportSupport.export(snapshot, format);
+                    }
+                },
+                new BackgroundTasks.Success<java.io.File>() {
+                    @Override
+                    public void accept(java.io.File file) {
+                        AppMessages.success(ItemMasterPanel.this, t("message.export.success") + file.getAbsolutePath());
+                        logAction("ITEM_EXPORT_SUCCESS", "format=" + format.name()
+                                + " | file=" + file.getAbsolutePath() + " | rows=" + snapshot.rowCount());
+                    }
                 }
-            }
-        }
+        );
     }
 
     private int selectedRow() {
@@ -467,6 +520,62 @@ public class ItemMasterPanel extends JPanel {
             return -1;
         }
         return table.convertRowIndexToModel(table.getSelectedRow());
+    }
+
+    private void applyFilter() {
+        if (tableSorter == null || filterField == null) {
+            return;
+        }
+        String filter = filterField.getText();
+        String status = statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString();
+        List<RowFilter<Object, Object>> filters = new ArrayList<RowFilter<Object, Object>>();
+        if (filter != null && filter.trim().length() > 0) {
+            filters.add(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(filter.trim())));
+        }
+        if (status.length() > 0) {
+            filters.add(RowFilter.regexFilter("(?i)^" + java.util.regex.Pattern.quote(I18n.textOrValue(session.getLanguage(), status)) + "$"));
+        }
+        if (filters.isEmpty()) {
+            tableSorter.setRowFilter(null);
+        } else {
+            tableSorter.setRowFilter(RowFilter.andFilter(filters));
+        }
+    }
+
+    private String selectedItemCode() {
+        int row = selectedRow();
+        return row < 0 || row >= records.size() ? null : records.get(row).getItemCode();
+    }
+
+    private void selectItem(String preferredItemCode) {
+        if (records.isEmpty()) {
+            return;
+        }
+        int modelRow = 0;
+        if (preferredItemCode != null && preferredItemCode.trim().length() > 0) {
+            for (int i = 0; i < records.size(); i++) {
+                if (preferredItemCode.equals(records.get(i).getItemCode())) {
+                    modelRow = i;
+                    break;
+                }
+            }
+        }
+        int viewRow = table.convertRowIndexToView(modelRow);
+        if (viewRow >= 0 && viewRow < table.getRowCount()) {
+            table.setRowSelectionInterval(viewRow, viewRow);
+        } else if (table.getRowCount() > 0) {
+            table.setRowSelectionInterval(0, 0);
+        }
+    }
+
+    private String safeFilterSuffix() {
+        String filter = filterField == null ? "" : filterField.getText();
+        String status = statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString();
+        String raw = (filter == null ? "" : filter.trim()) + (status.length() == 0 ? "" : "-" + status.replace("status.", ""));
+        if (raw.trim().length() == 0) {
+            return "";
+        }
+        return raw.replaceAll("[^A-Za-z0-9_-]+", "_") + "-";
     }
 
     private String[] defaultValues() {
@@ -501,15 +610,27 @@ public class ItemMasterPanel extends JPanel {
         return rows;
     }
 
-    private void writeCsvLine(Writer writer, String[] values) throws Exception {
-        for (int i = 0; i < values.length; i++) {
-            if (i > 0) {
-                writer.write(",");
-            }
-            String value = values[i] == null ? "" : values[i];
-            writer.write("\"" + value.replace("\"", "\"\"") + "\"");
+    private String filterSummary() {
+        List<String> parts = new ArrayList<String>();
+        String filter = filterField == null ? "" : filterField.getText();
+        String status = statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString();
+        if (filter != null && filter.trim().length() > 0) {
+            parts.add("Search=" + filter.trim());
         }
-        writer.write(System.lineSeparator());
+        if (status.length() > 0) {
+            parts.add("Status=" + status);
+        }
+        if (parts.isEmpty()) {
+            return "None";
+        }
+        StringBuilder summary = new StringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) {
+                summary.append("; ");
+            }
+            summary.append(parts.get(i));
+        }
+        return summary.toString();
     }
 
     private String t(String key) {

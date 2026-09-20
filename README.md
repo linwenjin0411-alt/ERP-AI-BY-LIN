@@ -57,6 +57,8 @@ Daily desktop use should start from `LinovaOneERP.exe`. It launches `run.bat` in
 
 When `LinovaOneERP.exe` is opened, the launcher starts `run.bat`. If `target/linova-one-erp.jar` is missing after a fresh clone, `run.bat` builds it with Maven first; this can take a few minutes on the first run. If startup fails before the app window opens, the launcher shows an error and writes a startup log under `logs/YYYYMMDD/`.
 
+If the desktop app was left running while code was rebuilt, close the app and run `LinovaOneERP - clean.bat`. It removes generated build output, rebuilds `target/linova-one-erp.jar`, and then starts `LinovaOneERP.exe`. If Windows reports that the jar is still in use, close every ERP window or the related `java.exe` / `javaw.exe` process, then press `R` in the clean script to retry.
+
 Maintenance command-line startup:
 
 ```bat
@@ -122,6 +124,18 @@ Main navigation uses an mcframe-style three-level layout: dark root module menu,
 
 Business pages use a unified mcframe-style work screen: toolbar actions, searchable and sortable tables, side context, document numbering rule, organization/period context, and CSV export. Query, report, AI, and inventory ledger pages are read-only by design.
 
+Workspace search supports module, function, column, and visible row text matching. Reopening an already-open function focuses the existing window instead of creating a duplicate, and the side footer records the most recently closed function. Tables support a right-click menu for copying a cell, exporting the current row, and opening details.
+
+Keyboard shortcuts: `Ctrl+F` focuses workspace search, `Ctrl+R` refreshes the current page, `Ctrl+E` exports the current table, and `Ctrl+L` signs out.
+
+## Internationalization
+
+The application ships English, Simplified Chinese, and Japanese text. Built-in text remains in `I18n.java` for compatibility, and high-frequency labels can be overridden from UTF-8 resource files under `src/main/resources/i18n/messages_*.properties`.
+
+The language selected at sign-in is attached to the user session. Windows opened after sign-in use that session language; already opened desktop windows do not hot-swap language and should be reopened after a language change. CSV exports use localized table headers and localized display values from the current session.
+
+Delivery screenshots and PPT material should use one agreed language per package. Avoid mixing English, Simplified Chinese, and Japanese in the same customer-facing screenshot set unless the purpose is explicitly to demonstrate language switching.
+
 ## License
 
 After a user ID and password are accepted, the login flow validates the license before opening the ERP workspace. If no valid license exists, the login window shows a localized English, Simplified Chinese, or Japanese prompt and asks for a license key.
@@ -140,9 +154,10 @@ Example:
 license.verifyApiUrl=https://your-license-server.example/api.php?action=verify
 license.cacheDays=30
 license.timeoutMs=5000
+license.deviceBinding.enabled=false
 ```
 
-The application automatically appends `product_code=LinovaOneERP`, `user_code`, and, when entered by the user, `license_key`.
+The application automatically appends `product_code=LinovaOneERP`, `user_code`, and, when entered by the user, `license_key`. It appends `machine_code` only when device binding is enabled by policy.
 
 When MySQL is enabled, license records are stored in `erp_licenses`, but they are not used as an offline grant. If a stored key exists, the application confirms that exact key with the configured API before allowing login. If no key exists or verification fails, the login window asks the user to enter a license key and still requires the API to return `ok=true`, a matching product, and a non-expired `expires_at`.
 
@@ -155,7 +170,7 @@ LINOVA-yyyyMMdd-signature
 The date portion is the license expiration date. The signature portion is verified with the application public key, so a plain future date is not enough to create a valid license. Online rejection is not bypassed by this compatibility verifier.
 
 ```text
-Example structure only: LINOVA-20271231-<signature>
+Demo/example structure only: LINOVA-20271231-<signature>
 ```
 
 Expired, malformed, or unsigned keys are rejected, and the login window remains open.
@@ -290,5 +305,3 @@ The following screenshots show the sign-in flow, license prompt, main dashboard,
 <img width="1040" height="650" alt="072_login_with_license_prompt" src="https://github.com/user-attachments/assets/005db6da-dff0-4833-a900-d99c9f613cee" />
 <img width="1455" height="880" alt="002_main_dashboard" src="https://github.com/user-attachments/assets/a3b2add1-81c3-427e-88ac-9aba64ad2687" />
 <img width="1455" height="880" alt="003_main_master-master-maint" src="https://github.com/user-attachments/assets/9380d098-0f62-41da-b84f-18a1c6c26594" />
-
-

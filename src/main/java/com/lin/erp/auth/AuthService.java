@@ -6,11 +6,7 @@ import com.lin.erp.i18n.I18n;
 import com.lin.erp.i18n.Language;
 import com.lin.erp.logging.AppLogger;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -60,12 +56,27 @@ public class AuthService {
             if (account == null) {
                 throw new AuthException(I18n.t(language, "auth.user.notFound"));
             }
-
-            String candidateHash = hashPasswordHex(new String(password));
-            if (!candidateHash.equalsIgnoreCase(account.getPasswordHash())) {
+            if (account.isLocked()) {
+                AppLogger.warning("Database user is locked until " + account.getLockedUntil() + ": " + normalizedUsername);
                 throw new AuthException(I18n.t(language, "auth.bad.credentials"));
             }
 
+            if (!PasswordHasher.verify(password, account.getPasswordHash())) {
+                try {
+                    dbUserRepository.recordFailedLogin(account.getUsername());
+                } catch (SQLException e) {
+                    AppLogger.error("Failed to update failed login counter.", e);
+                }
+                throw new AuthException(I18n.t(language, "auth.bad.credentials"));
+            }
+
+            if (PasswordHasher.needsRehash(account.getPasswordHash())) {
+                try {
+                    dbUserRepository.updatePasswordHash(account.getUsername(), PasswordHasher.hash(password));
+                } catch (SQLException e) {
+                    AppLogger.error("Failed to upgrade password hash.", e);
+                }
+            }
             try {
                 dbUserRepository.recordLogin(account.getUsername());
             } catch (SQLException e) {
@@ -92,13 +103,8 @@ public class AuthService {
             throw new AuthException(I18n.t(language, "auth.user.notFound"));
         }
 
-        byte[] candidateHash = hashPassword(new String(password));
-        try {
-            if (!MessageDigest.isEqual(account.passwordHash, candidateHash)) {
-                throw new AuthException(I18n.t(language, "auth.bad.credentials"));
-            }
-        } finally {
-            Arrays.fill(candidateHash, (byte) 0);
+        if (!PasswordHasher.verify(password, account.passwordHash)) {
+            throw new AuthException(I18n.t(language, "auth.bad.credentials"));
         }
 
         return new UserSession(
@@ -115,7 +121,7 @@ public class AuthService {
         String normalizedUsername = normalizeUsername(username);
         accounts.put(normalizedUsername, new Account(
                 normalizedUsername,
-                hashPassword(password),
+                PasswordHasher.hash(password),
                 displayNameKey,
                 roleCodeFromKey(roleNameKey),
                 roleNameKey,
@@ -140,34 +146,15 @@ public class AuthService {
         return "";
     }
 
-    private byte[] hashPassword(String password) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return digest.digest(password.getBytes(StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is not available.", e);
-        }
-    }
-
-    private String hashPasswordHex(String password) {
-        byte[] hash = hashPassword(password);
-        StringBuilder builder = new StringBuilder(hash.length * 2);
-        for (byte b : hash) {
-            builder.append(String.format("%02x", b & 0xff));
-        }
-        Arrays.fill(hash, (byte) 0);
-        return builder.toString();
-    }
-
     private static final class Account {
         private final String username;
-        private final byte[] passwordHash;
+        private final String passwordHash;
         private final String displayNameKey;
         private final String roleCode;
         private final String roleNameKey;
         private final String companyNameKey;
 
-        private Account(String username, byte[] passwordHash, String displayNameKey, String roleCode, String roleNameKey, String companyNameKey) {
+        private Account(String username, String passwordHash, String displayNameKey, String roleCode, String roleNameKey, String companyNameKey) {
             this.username = username;
             this.passwordHash = passwordHash;
             this.displayNameKey = displayNameKey;

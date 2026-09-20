@@ -1,10 +1,9 @@
 package com.lin.erp.db;
 
+import com.lin.erp.auth.PasswordHasher;
 import com.lin.erp.config.DbConfig;
 
 import java.io.Console;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -72,17 +71,7 @@ public class DatabaseSetup {
     }
 
     private static String hashPasswordHex(char[] password) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hash = digest.digest(new String(password).getBytes(StandardCharsets.UTF_8));
-        try {
-            StringBuilder builder = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                builder.append(String.format("%02x", b & 0xff));
-            }
-            return builder.toString();
-        } finally {
-            Arrays.fill(hash, (byte) 0);
-        }
+        return PasswordHasher.hash(password);
     }
 
     private static void printCount(DbConfig config, String tableName) throws Exception {

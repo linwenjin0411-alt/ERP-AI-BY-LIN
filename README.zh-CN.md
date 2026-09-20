@@ -34,7 +34,7 @@ Linova One ERP 是面向制造业业务的桌面 ERP 原型。当前覆盖主数
 
 系统采用模块化工作台设计。用户登录并通过 License 校验后，从 mcframe 风格的多级菜单进入各功能页面。功能页面保持统一的 CRUD 体验，同时在可用范围内使用业务专用字段和业务专用表。
 
-核心业务数据存储在 MySQL 中。当前模型包括品目主数据、BOM、客户/供应商主数据、仓库主数据、采购单据、销售单据、制造单据、库存记录、自动生成的库存台账、业务状态、状态流转和操作审计日志。
+核心业务数据存储在 MySQL 中。当前模型包括物料主数据、BOM、客户/供应商主数据、仓库主数据、采购单据、销售单据、制造单据、库存记录、自动生成的库存台账、业务状态、状态流转和操作审计日志。
 
 ## 运行
 
@@ -118,7 +118,7 @@ logs/YYYYMMDD/
 
 普通消息，例如登录成功或操作完成，会以小型 toast 窗口显示，并在 3 秒后关闭。错误消息使用阻塞式提示框，直到用户确认为止。
 
-主导航采用 mcframe 风格的三级布局：深色根模块菜单、二级业务区域导航，以及带青绿色区域标题的功能按钮网格。点击功能会打开独立桌面窗口。`Master Data -> Master Maintenance -> Item Master Management` 会打开由 `erp_item_masters` 支撑的品目主数据窗口，支持新增、编辑、删除、刷新和 CSV 导出。
+主导航采用 mcframe 风格的三级布局：深色根模块菜单、二级业务区域导航，以及带青绿色区域标题的功能按钮网格。点击功能会打开独立桌面窗口。`Master Data -> Master Maintenance -> Item Master Management` 会打开由 `erp_item_masters` 支撑的物料主数据窗口，支持新增、编辑、删除、刷新和 CSV 导出。
 
 业务页面使用统一的 mcframe 风格工作画面：工具栏动作、可搜索可排序表格、右侧业务上下文、单据编号规则、组织/期间上下文和 CSV 导出。查询、报表、AI、库存台账页面按设计为只读。
 
@@ -216,7 +216,7 @@ schema 包含以下主要表组：
 - 流程和审计：`erp_business_statuses`、`erp_business_status_transitions`、`erp_business_operation_logs`
 - 通用 fallback 和 License：`erp_function_records`、`erp_licenses`
 
-登录后的大多数导航、模块元数据、品目主数据、License 数据和核心业务工作列表记录会持久化到 MySQL。部分原型默认数据仍会在业务表为空时自动生成。
+登录后的大多数导航、模块元数据、物料主数据、License 数据和核心业务工作列表记录会持久化到 MySQL。部分原型默认数据仍会在业务表为空时自动生成。
 
 ## 初始应用用户
 

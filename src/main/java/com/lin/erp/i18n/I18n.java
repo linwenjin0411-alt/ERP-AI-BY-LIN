@@ -1,9 +1,17 @@
 package com.lin.erp.i18n;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 
 public final class I18n {
     public static final String APP_NAME = "Linova One ERP";
@@ -37,7 +45,7 @@ public final class I18n {
         put("login.password", "Password", "密码", "パスワード");
         put("login.company", "Company", "公司", "会社");
         put("login.language", "Language", "语言", "言語");
-        put("login.remember", "Remember this workstation", "记住本机登录信息", "この端末を記憶する");
+        put("login.remember", "Remember workstation note only", "仅标记本机提示", "端末メモのみ");
         put("login.button", "Sign in", "登录", "ログイン");
         put("login.test.account", "Demo account: admin / admin123", "测试账号：admin / admin123", "デモアカウント：admin / admin123");
         put("login.footer", "Next: user master, RBAC, organization switch, and audit log.",
@@ -64,6 +72,12 @@ public final class I18n {
         put("message.operation.success", "Operation completed successfully.", "操作成功。", "操作が完了しました。");
         put("message.edit.success", "Changes saved successfully.", "修改成功。", "変更を保存しました。");
         put("message.language.changed", "Language changed.", "语言已切换。", "言語を切り替えました。");
+        put("message.search.matched", "Opened: ", "已打开：", "開きました：");
+        put("message.search.none", "No matching module, function, or table row was found.",
+                "未找到匹配的模块、功能或表格记录。",
+                "一致するモジュール、機能、テーブル行が見つかりません。");
+        put("message.copy.done", "Copied to clipboard.", "已复制到剪贴板。", "クリップボードにコピーしました。");
+        put("message.drilldown.opened", "Drilldown opened: ", "已钻取：", "ドリルダウンを開きました：");
         put("message.select.row", "Select a row first.", "请先选择一行数据。", "先に行を選択してください。");
         put("message.create.success", "Record created successfully.", "新建成功。", "レコードを作成しました。");
         put("message.approve.success", "Approval completed.", "审批完成。", "承認が完了しました。");
@@ -82,7 +96,10 @@ public final class I18n {
         put("message.permission.denied", "You do not have permission to perform this action.",
                 "您没有权限执行此操作。",
                 "この操作を実行する権限がありません。");
-        put("message.item.required", "Item code and item name are required.", "品目编号和品目名称为必填项。", "品目コードと品目名は必須です。");
+        put("message.readonly.page", "This page is read-only. Use filter, sort, refresh, or export.",
+                "当前页面为只读。请使用筛选、排序、刷新或导出。",
+                "この画面は参照専用です。フィルター、並べ替え、更新、エクスポートを使用してください。");
+        put("message.item.required", "Item code and item name are required.", "物料编号和物料名称为必填项。", "品目コードと品目名は必須です。");
         put("license.prompt.title", "License required", "需要许可证", "ライセンスが必要です");
         put("license.prompt.message", "Enter a signed license key. Format: LINOVA-yyyyMMdd-signature.",
                 "请输入签名许可证。格式：LINOVA-yyyyMMdd-signature。",
@@ -93,6 +110,9 @@ public final class I18n {
         put("license.invalid", "The license key is invalid or expired.",
                 "许可证无效或已过期。",
                 "ライセンスキーが無効、または期限切れです。");
+        put("license.expiry.warning", "License expires in days: ",
+                "许可证剩余天数：",
+                "ライセンスの残日数：");
         put("license.register.success", "License registered. Valid until: ",
                 "许可证已登记，有效期至：",
                 "ライセンスを登録しました。有効期限：");
@@ -112,6 +132,20 @@ public final class I18n {
         put("license.field.validFrom", "Valid From", "有效开始日", "有効開始日");
         put("license.field.validUntil", "Valid Until", "有效截止日", "有効期限");
         put("license.action.register", "Register License", "登记许可证", "ライセンス登録");
+        put("license.action.revoke", "Revoke", "撤销", "取消");
+        put("license.revoke.confirm", "Revoke the active license and keep it in history?",
+                "是否撤销当前有效许可证并保留历史记录？",
+                "有効なライセンスを取り消し、履歴として保持しますか？");
+        put("license.revoke.success", "License revoked.", "许可证已撤销。", "ライセンスを取り消しました。");
+        put("license.revoke.failed", "License could not be revoked. See the app log for details.",
+                "许可证撤销失败，请查看应用日志。",
+                "ライセンスを取り消せません。アプリログを確認してください。");
+        put("license.field.customer", "Customer", "授权客户", "ライセンス顧客");
+        put("license.field.modules", "Modules", "授权模块", "許可モジュール");
+        put("license.field.seatPolicy", "Seat Policy", "席位策略", "シートポリシー");
+        put("license.field.remainingDays", "Remaining Days", "剩余天数", "残日数");
+        put("license.field.reason", "Reason", "原因", "理由");
+        put("license.field.deviceBinding", "Device Binding", "设备绑定", "端末バインド");
         put("license.status.valid", "Valid until: ", "有效期至：", "有効期限：");
         put("license.status.invalid", "No valid license", "没有有效许可证", "有効なライセンスがありません");
         put("dialog.confirm.title", "Confirm action", "确认操作", "操作確認");
@@ -150,7 +184,7 @@ public final class I18n {
         put("function.field.businessDate", "Business Date", "业务日期", "業務日付");
         put("function.field.status", "Status", "状态", "ステータス");
         put("function.field.partner", "Partner", "业务伙伴", "取引先");
-        put("function.field.item", "Item", "品目", "品目");
+        put("function.field.item", "Item", "物料", "品目");
         put("function.field.quantity", "Quantity", "数量", "数量");
         put("function.field.warehouse", "Warehouse", "仓库", "倉庫");
         put("function.field.owner", "Owner", "负责人", "担当者");
@@ -160,8 +194,8 @@ public final class I18n {
         put("function.context.upstream", "Upstream", "上游", "上流");
         put("function.context.downstream", "Downstream", "下游", "下流");
         put("item.count.prefix", "Records: ", "记录数：", "件数: ");
-        put("item.side.title", "Item signals", "品目信号", "品目シグナル");
-        put("item.side.total", "Total items", "全部品目", "全品目");
+        put("item.side.title", "Item signals", "物料信号", "品目シグナル");
+        put("item.side.total", "Total items", "全部物料", "全品目");
         put("item.side.released", "Released", "已发布", "リリース済み");
         put("item.side.open", "Open", "打开", "未処理");
 
@@ -220,9 +254,19 @@ public final class I18n {
         put("action.post", "Post", "过账", "転記");
         put("action.simulate", "Simulate", "模拟", "シミュレーション");
         put("action.export", "Export", "导出", "エクスポート");
+        put("action.printPreview", "Preview", "打印预览", "印刷プレビュー");
+        put("action.aiSummary", "AI Summary", "AI 摘要", "AI 要約");
         put("action.delete", "Delete", "删除", "削除");
         put("action.details", "Details", "详情", "詳細");
         put("action.ask", "Ask", "提问", "質問");
+        put("action.logout", "Sign out", "退出登录", "ログアウト");
+        put("workspace.recent", "Recent: ", "最近：", "最近：");
+        put("workspace.recent.none", "Recent: none", "最近：无", "最近：なし");
+        put("table.empty", "No rows. Adjust filters or refresh.", "暂无记录，请调整筛选或刷新。", "行がありません。条件を変更するか更新してください。");
+        put("table.rows", "Rows: ", "行数：", "行数：");
+        put("table.menu.copyCell", "Copy cell", "复制单元格", "セルをコピー");
+        put("table.menu.exportRow", "Export row", "导出当前行", "行をエクスポート");
+        put("table.menu.details", "Open details", "打开详情", "詳細を開く");
 
         put("menu.area.master.maintenance", "Master Maintenance", "主数据维护", "マスタ保守");
         put("menu.area.governance", "Governance", "治理管理", "ガバナンス");
@@ -264,10 +308,11 @@ public final class I18n {
         put("menu.section.close", "Close", "结账", "締め");
         put("menu.section.aiAssist", "Assist", "辅助", "支援");
         put("menu.section.reports", "Reports", "报表", "レポート");
+        put("menu.area.reports", "Reports", "报表", "レポート");
         put("menu.section.users", "Users", "用户", "ユーザー");
         put("menu.section.roles", "Roles", "角色", "ロール");
         put("menu.section.audit", "Audit", "审计", "監査");
-        put("menu.master.item", "Item Master Management", "品目主数据管理", "品目マスタ管理");
+        put("menu.master.item", "Item Master Management", "物料主数据管理", "品目マスタ管理");
         put("menu.master.bom", "BOM Management", "BOM 管理", "BOM管理");
         put("menu.master.customer", "Customer Master Management", "客户主数据管理", "得意先マスタ管理");
         put("menu.master.supplier", "Supplier Master Management", "供应商主数据管理", "仕入先マスタ管理");
@@ -381,9 +426,19 @@ public final class I18n {
         put("column.role", "Role", "角色", "ロール");
         put("column.department", "Department", "部门", "部門");
         put("column.email", "Email", "邮箱", "メール");
+        put("column.company", "Company", "公司", "会社");
         put("column.language", "Language", "语言", "言語");
         put("column.permission", "Permission", "权限", "権限");
         put("column.scope", "Scope", "范围", "範囲");
+        put("column.menu", "Menu", "菜单", "メニュー");
+        put("column.view", "View", "查看", "参照");
+        put("column.create", "Create", "新增", "登録");
+        put("column.update", "Update", "修改", "更新");
+        put("column.approve", "Approve", "审批", "承認");
+        put("column.failedLogins", "Failed logins", "失败次数", "失敗回数");
+        put("column.lockedUntil", "Locked until", "锁定至", "ロック期限");
+        put("column.resetPassword", "Reset password", "重置密码", "パスワード再設定");
+        put("column.userCount", "Users", "用户数", "ユーザー数");
         put("column.status", "Status", "状态", "ステータス");
         put("column.owner", "Owner", "负责人", "担当者");
         put("column.date", "Date", "日期", "日付");
@@ -397,9 +452,9 @@ public final class I18n {
         put("column.warehouse", "Warehouse", "仓库", "倉庫");
         put("column.risk", "Risk", "风险", "リスク");
         put("column.next", "Next step", "下一步", "次の処理");
-        put("column.itemCode", "Item Code", "品目编号", "品目コード");
-        put("column.itemName", "Item Name", "品目名称", "品目名");
-        put("column.itemType", "Item Type", "品目类型", "品目タイプ");
+        put("column.itemCode", "Item Code", "物料编号", "品目コード");
+        put("column.itemName", "Item Name", "物料名称", "品目名");
+        put("column.itemType", "Item Type", "物料类型", "品目タイプ");
         put("column.uom", "UoM", "单位", "単位");
         put("column.safetyStock", "Safety Stock", "安全库存", "安全在庫");
         put("column.leadTime", "Lead Time Days", "提前期天数", "リードタイム日数");
@@ -578,6 +633,7 @@ public final class I18n {
         put("ai.answer", "Sample insight: RM-1008 and PK-2210 require purchase follow-up. MO-2608-004 should be replanned if PO-45000127 is not received by Aug 20.",
                 "示例洞察：RM-1008 与 PK-2210 需要跟进采购；如果 PO-45000127 在 8 月 20 日前未收货，MO-2608-004 需要重排。",
                 "サンプル洞察：RM-1008 と PK-2210 は購買フォローが必要です。PO-45000127 が 8月20日 までに入荷しない場合、MO-2608-004 の再計画が必要です。");
+        loadResourceOverrides();
     }
 
     private I18n() {
@@ -621,9 +677,63 @@ public final class I18n {
         return Locale.ENGLISH;
     }
 
+    public static String formatDate(Language language, LocalDate date) {
+        if (date == null) {
+            return "";
+        }
+        if (language == Language.ZH) {
+            return date.format(DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.SIMPLIFIED_CHINESE));
+        }
+        if (language == Language.JA) {
+            return date.format(DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.JAPANESE));
+        }
+        return date.format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH));
+    }
+
+    public static String formatNumber(Language language, String value) {
+        if (value == null || value.trim().length() == 0) {
+            return "";
+        }
+        try {
+            BigDecimal decimal = new BigDecimal(value.replace(",", "").trim());
+            NumberFormat format = NumberFormat.getNumberInstance(locale(language));
+            return format.format(decimal);
+        } catch (NumberFormatException e) {
+            return value;
+        }
+    }
+
     private static void put(String key, String en, String zh, String ja) {
         TEXTS.get(Language.EN).put(key, en);
         TEXTS.get(Language.ZH).put(key, zh);
         TEXTS.get(Language.JA).put(key, ja);
+    }
+
+    private static void loadResourceOverrides() {
+        loadResourceOverrides(Language.EN, "/i18n/messages_en.properties");
+        loadResourceOverrides(Language.ZH, "/i18n/messages_zh_CN.properties");
+        loadResourceOverrides(Language.JA, "/i18n/messages_ja.properties");
+    }
+
+    private static void loadResourceOverrides(Language language, String path) {
+        InputStream input = I18n.class.getResourceAsStream(path);
+        if (input == null) {
+            return;
+        }
+        try {
+            Properties properties = new Properties();
+            properties.load(new BufferedReader(new InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8)));
+            for (String key : properties.stringPropertyNames()) {
+                TEXTS.get(language).put(key, properties.getProperty(key));
+            }
+        } catch (Exception ignored) {
+            // Keep the built-in text if an optional resource file cannot be read.
+        } finally {
+            try {
+                input.close();
+            } catch (Exception ignored) {
+                // Nothing else to close.
+            }
+        }
     }
 }

@@ -50,7 +50,9 @@ public class RoleMenuPermission {
         if ("action.export".equals(actionKey)
                 || "action.details".equals(actionKey)
                 || "action.simulate".equals(actionKey)
-                || "action.ask".equals(actionKey)) {
+                || "action.ask".equals(actionKey)
+                || "action.printPreview".equals(actionKey)
+                || "action.aiSummary".equals(actionKey)) {
             return canView;
         }
         return false;

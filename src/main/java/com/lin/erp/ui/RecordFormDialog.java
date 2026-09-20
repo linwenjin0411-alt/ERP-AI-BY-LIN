@@ -8,6 +8,7 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.JFormattedTextField;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -29,11 +30,15 @@ import java.awt.Insets;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.text.NumberFormat;
+import java.text.ParseException;
 
 public class RecordFormDialog extends JDialog {
     private final Language language;
     private final String[] columnKeys;
     private final JComponent[] editors;
+    private final boolean editMode;
+    private JLabel validationLabel;
     private boolean saved;
 
     public RecordFormDialog(Window owner, Language language, String moduleName, String actionName,
@@ -42,6 +47,7 @@ public class RecordFormDialog extends JDialog {
         this.language = language;
         this.columnKeys = columnKeys;
         this.editors = new JComponent[columnKeys.length];
+        this.editMode = "action.edit".equals(actionKey);
 
         setIconImages(AppIcon.images());
         setMinimumSize(new Dimension(780, 580));
@@ -139,6 +145,9 @@ public class RecordFormDialog extends JDialog {
             labelGbc.insets = new Insets(14, 0, 6, 10);
 
             JLabel label = new JLabel(I18n.textOrValue(language, columnKeys[i]));
+            if (isRequired(columnKeys[i], i)) {
+                label.setText(label.getText() + " *");
+            }
             label.setForeground(AppTheme.TEXT_MUTED);
             label.setFont(AppTheme.font(Font.BOLD, 11));
             form.add(label, labelGbc);
@@ -151,6 +160,7 @@ public class RecordFormDialog extends JDialog {
             fieldGbc.insets = new Insets(0, 0, 18, i % 2 == 0 ? 18 : 0);
 
             JComponent editor = createEditor(columnKeys[i], valueAt(initialValues, i));
+            label.setLabelFor(editor);
             editors[i] = editor;
             form.add(editor, fieldGbc);
         }
@@ -206,6 +216,11 @@ public class RecordFormDialog extends JDialog {
                 AppTheme.emptyBorder(14, 20, 14, 20)
         ));
 
+        validationLabel = new JLabel(" ");
+        validationLabel.setForeground(AppTheme.ERROR);
+        validationLabel.setFont(AppTheme.font(Font.PLAIN, 12));
+        footer.add(validationLabel);
+
         JButton cancel = new JButton(t("form.cancel"));
         cancel.putClientProperty("JButton.buttonType", "roundRect");
         cancel.putClientProperty("FlatLaf.style", "arc: 8; borderWidth: 1; focusWidth: 0");
@@ -233,6 +248,9 @@ public class RecordFormDialog extends JDialog {
         save.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
+                if (!validateForm()) {
+                    return;
+                }
                 saved = true;
                 dispose();
             }
@@ -242,10 +260,11 @@ public class RecordFormDialog extends JDialog {
     }
 
     private JComponent createEditor(String columnKey, String value) {
-        if ("column.status".equals(columnKey)) {
+        if ("column.status".equals(columnKey) || "function.field.status".equals(columnKey)) {
             return styledCombo(new String[]{
                     "status.open", "status.draft", "status.waitingApproval", "status.ready",
-                    "status.released", "status.posted", "status.blocked", "status.late", "status.shortage"
+                    "status.released", "status.posted", "status.closed", "status.cancelled",
+                    "status.blocked", "status.late", "status.shortage"
             }, value);
         }
         if ("column.risk".equals(columnKey)) {
@@ -258,8 +277,32 @@ public class RecordFormDialog extends JDialog {
                     "term.shipment", "term.confirmation", "term.costing"
             }, value);
         }
+        if (isLongText(columnKey)) {
+            JTextArea area = new JTextArea(value == null ? "" : value, 4, 20);
+            area.setLineWrap(true);
+            area.setWrapStyleWord(true);
+            area.setForeground(AppTheme.TEXT_PRIMARY);
+            area.setBackground(new Color(248, 250, 252));
+            area.setBorder(new CompoundBorder(
+                    BorderFactory.createLineBorder(new Color(222, 229, 238)),
+                    AppTheme.emptyBorder(7, 11, 7, 11)
+            ));
+            area.setName(I18n.textOrValue(language, columnKey));
+            return area;
+        }
+        if (isNumeric(columnKey)) {
+            JFormattedTextField number = new JFormattedTextField(NumberFormat.getNumberInstance());
+            number.setValue(parseNumber(value));
+            number.setText(value == null ? "" : value);
+            styleField(number);
+            return number;
+        }
         JTextField field = new JTextField(value == null ? "" : value);
         styleField(field);
+        if (editMode && isIdentityField(columnKey)) {
+            field.setEditable(false);
+            field.setBackground(new Color(238, 242, 247));
+        }
         return field;
     }
 
@@ -294,6 +337,109 @@ public class RecordFormDialog extends JDialog {
                 BorderFactory.createLineBorder(new Color(222, 229, 238)),
                 AppTheme.emptyBorder(0, 11, 0, 11)
         ));
+    }
+
+    private boolean validateForm() {
+        for (int i = 0; i < columnKeys.length; i++) {
+            String value = valueFromEditor(editors[i]);
+            if (isRequired(columnKeys[i], i) && value.trim().length() == 0) {
+                showValidation(I18n.textOrValue(language, columnKeys[i]) + " is required.", editors[i]);
+                return false;
+            }
+            if (isNumeric(columnKeys[i]) && value.trim().length() > 0 && parseNumber(value) == null) {
+                showValidation(I18n.textOrValue(language, columnKeys[i]) + " must be numeric.", editors[i]);
+                return false;
+            }
+            if (isDate(columnKeys[i]) && value.trim().length() > 0 && !value.trim().matches("\\d{4}[-/]\\d{2}[-/]\\d{2}")) {
+                showValidation(I18n.textOrValue(language, columnKeys[i]) + " must use yyyy-MM-dd.", editors[i]);
+                return false;
+            }
+        }
+        if (validationLabel != null) {
+            validationLabel.setText(" ");
+        }
+        return true;
+    }
+
+    private void showValidation(String message, JComponent editor) {
+        if (validationLabel != null) {
+            validationLabel.setText(message);
+        }
+        if (editor != null) {
+            editor.requestFocusInWindow();
+        }
+    }
+
+    private String valueFromEditor(JComponent editor) {
+        if (editor instanceof JComboBox) {
+            Object item = ((JComboBox<?>) editor).getSelectedItem();
+            return item == null ? "" : item.toString();
+        }
+        if (editor instanceof JTextArea) {
+            return ((JTextArea) editor).getText();
+        }
+        if (editor instanceof JTextField) {
+            return ((JTextField) editor).getText();
+        }
+        return "";
+    }
+
+    private boolean isRequired(String columnKey, int index) {
+        return index == 0
+                || "column.itemName".equals(columnKey)
+                || "function.field.businessDate".equals(columnKey)
+                || "function.field.item".equals(columnKey)
+                || "function.field.quantity".equals(columnKey)
+                || "function.field.partner".equals(columnKey);
+    }
+
+    private boolean isIdentityField(String columnKey) {
+        return "column.id".equals(columnKey)
+                || "column.itemCode".equals(columnKey)
+                || "function.field.documentNo".equals(columnKey)
+                || "license.field.key".equals(columnKey);
+    }
+
+    private boolean isNumeric(String columnKey) {
+        return "column.qty".equals(columnKey)
+                || "column.amount".equals(columnKey)
+                || "column.safetyStock".equals(columnKey)
+                || "column.leadTime".equals(columnKey)
+                || "column.creditLimit".equals(columnKey)
+                || "function.field.quantity".equals(columnKey)
+                || columnKey.endsWith("Cost")
+                || "column.demand".equals(columnKey)
+                || "column.stock".equals(columnKey)
+                || "column.ordered".equals(columnKey)
+                || "column.wip".equals(columnKey)
+                || "column.netDemand".equals(columnKey);
+    }
+
+    private boolean isDate(String columnKey) {
+        return "column.date".equals(columnKey)
+                || "column.due".equals(columnKey)
+                || "function.field.businessDate".equals(columnKey)
+                || "license.field.validFrom".equals(columnKey)
+                || "license.field.validUntil".equals(columnKey)
+                || "column.effectiveFrom".equals(columnKey);
+    }
+
+    private boolean isLongText(String columnKey) {
+        return "function.field.memo".equals(columnKey)
+                || "column.prompt".equals(columnKey)
+                || "column.approvalHistory".equals(columnKey)
+                || "column.rejectReason".equals(columnKey);
+    }
+
+    private Number parseNumber(String value) {
+        if (value == null || value.trim().length() == 0) {
+            return null;
+        }
+        try {
+            return NumberFormat.getNumberInstance().parse(value.trim().replace("￥", "").replace("$", ""));
+        } catch (ParseException e) {
+            return null;
+        }
     }
 
     private String valueAt(String[] values, int index) {

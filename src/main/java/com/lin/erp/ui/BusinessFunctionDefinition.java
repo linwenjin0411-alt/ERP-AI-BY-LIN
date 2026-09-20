@@ -3,6 +3,7 @@ package com.lin.erp.ui;
 public class BusinessFunctionDefinition {
     private final String[] fieldKeys;
     private final String[] defaultValues;
+    private final String[] persistenceKeys;
     private final String[] tableColumnKeys;
     private final String[][] tableRows;
     private final String flow;
@@ -15,7 +16,7 @@ public class BusinessFunctionDefinition {
     public BusinessFunctionDefinition(String[] fieldKeys, String[] defaultValues,
                                       String[] tableColumnKeys, String[][] tableRows,
                                       String flow, String upstream, String downstream) {
-        this(fieldKeys, defaultValues, tableColumnKeys, tableRows, flow, upstream, downstream,
+        this(fieldKeys, defaultValues, fieldKeys, tableColumnKeys, tableRows, flow, upstream, downstream,
                 "DOC-{module}-{yyMMdd}-{sequence}", "LINOVA / FY2026-08", false);
     }
 
@@ -23,8 +24,17 @@ public class BusinessFunctionDefinition {
                                       String[] tableColumnKeys, String[][] tableRows,
                                       String flow, String upstream, String downstream,
                                       String numberingRule, String organizationPeriod, boolean readOnly) {
+        this(fieldKeys, defaultValues, fieldKeys, tableColumnKeys, tableRows, flow, upstream, downstream,
+                numberingRule, organizationPeriod, readOnly);
+    }
+
+    public BusinessFunctionDefinition(String[] fieldKeys, String[] defaultValues, String[] persistenceKeys,
+                                      String[] tableColumnKeys, String[][] tableRows,
+                                      String flow, String upstream, String downstream,
+                                      String numberingRule, String organizationPeriod, boolean readOnly) {
         this.fieldKeys = fieldKeys;
         this.defaultValues = defaultValues;
+        this.persistenceKeys = persistenceKeys;
         this.tableColumnKeys = tableColumnKeys;
         this.tableRows = tableRows;
         this.flow = flow;
@@ -41,6 +51,10 @@ public class BusinessFunctionDefinition {
 
     public String[] getDefaultValues() {
         return defaultValues;
+    }
+
+    public String[] getPersistenceKeys() {
+        return persistenceKeys;
     }
 
     public String[] getTableColumnKeys() {
