@@ -90,12 +90,14 @@ public class DbFunctionRecordRepository {
             connection = Database.connect(config);
             ensureSchema(connection);
             statement = connection.prepareStatement(
-                    "insert into erp_function_records (function_code, c1, c2, c3, c4, c5, c6, c7, c8) "
-                            + "values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "insert into erp_function_records (function_code, c1, c2, c3, c4, c5, c6, c7, c8, created_by, updated_by) "
+                            + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     PreparedStatement.RETURN_GENERATED_KEYS
             );
             statement.setString(1, functionCode);
             bind(statement, 2, values);
+            statement.setString(10, auditUser);
+            statement.setString(11, auditUser);
             statement.executeUpdate();
             keys = statement.getGeneratedKeys();
             long generatedId = keys.next() ? keys.getLong(1) : -1;
@@ -130,10 +132,11 @@ public class DbFunctionRecordRepository {
             ensureSchema(connection);
             statement = connection.prepareStatement(
                     "update erp_function_records set c1 = ?, c2 = ?, c3 = ?, c4 = ?, c5 = ?, c6 = ?, c7 = ?, c8 = ? "
-                            + "where id = ? and active = 1"
+                            + ", updated_by = ? where id = ? and active = 1"
             );
             bind(statement, 1, values);
-            statement.setLong(9, id);
+            statement.setString(9, auditUser);
+            statement.setLong(10, id);
             statement.executeUpdate();
             recordOperationLog(connection, "erp_function_records", id, "UPDATE", "SUCCESS", "Generic function record updated.");
         } finally {
@@ -158,8 +161,13 @@ public class DbFunctionRecordRepository {
         try {
             connection = Database.connect(config);
             ensureSchema(connection);
-            statement = connection.prepareStatement("update erp_function_records set active = 0 where id = ?");
-            statement.setLong(1, id);
+            statement = connection.prepareStatement(
+                    "update erp_function_records set active = 0, updated_by = ?, voided_at = current_timestamp, "
+                            + "void_reason = ? where id = ?"
+            );
+            statement.setString(1, auditUser);
+            statement.setString(2, "Generic function record deactivated.");
+            statement.setLong(3, id);
             statement.executeUpdate();
             recordOperationLog(connection, "erp_function_records", id, "DELETE", "SUCCESS", "Generic function record deactivated.");
         } finally {
@@ -177,9 +185,12 @@ public class DbFunctionRecordRepository {
                             + "c1 varchar(255), c2 varchar(255), c3 varchar(255), c4 varchar(255),"
                             + "c5 varchar(255), c6 varchar(255), c7 varchar(255), c8 varchar(255),"
                             + "active tinyint(1) not null default 1,"
+                            + "created_by varchar(80), updated_by varchar(80),"
+                            + "voided_at timestamp null, void_reason varchar(255),"
                             + "created_at timestamp not null default current_timestamp,"
                             + "updated_at timestamp not null default current_timestamp on update current_timestamp,"
-                            + "index idx_erp_function_records_code (function_code)"
+                            + "index idx_erp_function_records_code (function_code),"
+                            + "index idx_erp_function_records_code_active (function_code, active)"
                             + ") engine=InnoDB default charset=utf8mb4"
             );
             statement.executeUpdate();
@@ -189,6 +200,11 @@ public class DbFunctionRecordRepository {
             }
         }
         DatabaseSchema.ensureColumn(connection, "erp_function_records", "active", "active tinyint(1) not null default 1");
+        DatabaseSchema.ensureColumn(connection, "erp_function_records", "created_by", "created_by varchar(80)");
+        DatabaseSchema.ensureColumn(connection, "erp_function_records", "updated_by", "updated_by varchar(80)");
+        DatabaseSchema.ensureColumn(connection, "erp_function_records", "voided_at", "voided_at timestamp null");
+        DatabaseSchema.ensureColumn(connection, "erp_function_records", "void_reason", "void_reason varchar(255)");
+        DatabaseSchema.ensureIndex(connection, "erp_function_records", "idx_erp_function_records_code_active", "index idx_erp_function_records_code_active (function_code, active)");
         ensureBusinessSchemas(connection);
     }
 
@@ -228,6 +244,8 @@ public class DbFunctionRecordRepository {
             statement.setString(1, mapping.documentType);
             validateNewStatus(mapping.statusValue(values));
             bindBusiness(statement, 2, mapping, values);
+            statement.setString(10, auditUser);
+            statement.setString(11, auditUser);
             statement.executeUpdate();
             keys = statement.getGeneratedKeys();
             long generatedId = keys.next() ? keys.getLong(1) : -1;
@@ -261,7 +279,8 @@ public class DbFunctionRecordRepository {
             validateStatusEdit(currentStatus, mapping.statusValue(values));
             statement = connection.prepareStatement(mapping.updateSql());
             bindBusiness(statement, 1, mapping, values);
-            statement.setLong(9, mapping.decodeId(encodedId));
+            statement.setString(9, auditUser);
+            statement.setLong(10, mapping.decodeId(encodedId));
             statement.executeUpdate();
             syncInventoryMovement(connection, mapping, mapping.decodeId(encodedId), values, true);
             recordOperationLog(connection, mapping.functionCode, mapping.decodeId(encodedId), "UPDATE", "SUCCESS", "Business record updated.");
@@ -285,8 +304,11 @@ public class DbFunctionRecordRepository {
             if (isPostedOrClosed(currentStatus)) {
                 throw new SQLException("Posted or closed business records cannot be deleted. Use a reversal document.");
             }
-            statement = connection.prepareStatement("update " + mapping.tableName + " set active = 0 where id = ?");
-            statement.setLong(1, mapping.decodeId(encodedId));
+            statement = connection.prepareStatement("update " + mapping.tableName
+                    + " set active = 0, updated_by = ?, voided_at = current_timestamp, void_reason = ? where id = ?");
+            statement.setString(1, auditUser);
+            statement.setString(2, "Business record deactivated.");
+            statement.setLong(3, mapping.decodeId(encodedId));
             statement.executeUpdate();
             syncInventoryMovement(connection, mapping, mapping.decodeId(encodedId), null, false);
             recordOperationLog(connection, mapping.functionCode, mapping.decodeId(encodedId), "DELETE", "SUCCESS", "Business record deactivated.");
@@ -378,6 +400,8 @@ public class DbFunctionRecordRepository {
             statement = connection.prepareStatement(mapping.insertSql());
             statement.setString(1, mapping.documentType);
             bindBusiness(statement, 2, mapping, values);
+            statement.setString(10, "system");
+            statement.setString(11, "system");
             statement.executeUpdate();
         } finally {
             if (statement != null) {
@@ -609,8 +633,39 @@ public class DbFunctionRecordRepository {
         DatabaseSchema.ensureColumn(connection, "erp_bom_components", "operation_code", "operation_code varchar(80)");
         DatabaseSchema.ensureColumn(connection, "erp_bom_components", "operation_scrap_rate", "operation_scrap_rate decimal(7,4)");
         DatabaseSchema.ensureColumn(connection, "erp_bom_components", "process_consumption", "process_consumption decimal(18,6)");
+        ensureBusinessAuditColumns(connection, "erp_purchase_documents", true);
+        ensureBusinessAuditColumns(connection, "erp_sales_documents", true);
+        ensureBusinessAuditColumns(connection, "erp_manufacturing_documents", true);
+        ensureBusinessAuditColumns(connection, "erp_inventory_records", false);
+        ensureBusinessAuditColumns(connection, "erp_inventory_movements", true);
+        ensureBusinessAuditColumns(connection, "erp_purchase_document_lines", false);
+        ensureBusinessAuditColumns(connection, "erp_sales_document_lines", false);
+        ensureBusinessAuditColumns(connection, "erp_bom_components", false);
+        ensureBusinessAuditColumns(connection, "erp_business_partners", false);
+        ensureBusinessAuditColumns(connection, "erp_warehouse_masters", false);
+        DatabaseSchema.ensureIndex(connection, "erp_purchase_documents", "idx_erp_purchase_documents_type_status_due",
+                "index idx_erp_purchase_documents_type_status_due (document_type, status, due_date)");
+        DatabaseSchema.ensureIndex(connection, "erp_sales_documents", "idx_erp_sales_documents_due",
+                "index idx_erp_sales_documents_due (due_date)");
+        DatabaseSchema.ensureIndex(connection, "erp_sales_documents", "idx_erp_sales_documents_type_status_due",
+                "index idx_erp_sales_documents_type_status_due (document_type, status, due_date)");
+        DatabaseSchema.ensureIndex(connection, "erp_manufacturing_documents", "idx_erp_manufacturing_documents_due",
+                "index idx_erp_manufacturing_documents_due (due_date)");
+        DatabaseSchema.ensureIndex(connection, "erp_manufacturing_documents", "idx_erp_manufacturing_documents_type_status_due",
+                "index idx_erp_manufacturing_documents_type_status_due (document_type, status, due_date)");
+        DatabaseSchema.ensureIndex(connection, "erp_inventory_records", "idx_erp_inventory_records_status",
+                "index idx_erp_inventory_records_status (status)");
         seedStatuses(connection);
         seedStatusTransitions(connection);
+    }
+
+    private void ensureBusinessAuditColumns(Connection connection, String tableName, boolean voidable) throws SQLException {
+        DatabaseSchema.ensureColumn(connection, tableName, "created_by", "created_by varchar(80)");
+        DatabaseSchema.ensureColumn(connection, tableName, "updated_by", "updated_by varchar(80)");
+        if (voidable) {
+            DatabaseSchema.ensureColumn(connection, tableName, "voided_at", "voided_at timestamp null");
+            DatabaseSchema.ensureColumn(connection, tableName, "void_reason", "void_reason varchar(255)");
+        }
     }
 
     private void seedStatuses(Connection connection) throws SQLException {
@@ -803,11 +858,13 @@ public class DbFunctionRecordRepository {
         PreparedStatement statement = null;
         try {
             statement = connection.prepareStatement(
-                    "insert into erp_function_records (function_code, c1, c2, c3, c4, c5, c6, c7, c8) "
-                            + "values (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    "insert into erp_function_records (function_code, c1, c2, c3, c4, c5, c6, c7, c8, created_by, updated_by) "
+                            + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             statement.setString(1, functionCode);
             bind(statement, 2, values);
+            statement.setString(10, "system");
+            statement.setString(11, "system");
             statement.executeUpdate();
         } finally {
             if (statement != null) {
@@ -1220,7 +1277,7 @@ public class DbFunctionRecordRepository {
             for (int i = 0; i < valueColumns.length; i++) {
                 sql.append(", ").append(valueColumns[i].name);
             }
-            sql.append(") values (?").append(", ?, ?, ?, ?, ?, ?, ?, ?)");
+            sql.append(", created_by, updated_by) values (?").append(", ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             return sql.toString();
         }
 
@@ -1233,7 +1290,7 @@ public class DbFunctionRecordRepository {
                 }
                 sql.append(valueColumns[i].name).append(" = ?");
             }
-            sql.append(" where id = ? and active = 1");
+            sql.append(", updated_by = ? where id = ? and active = 1");
             return sql.toString();
         }
 

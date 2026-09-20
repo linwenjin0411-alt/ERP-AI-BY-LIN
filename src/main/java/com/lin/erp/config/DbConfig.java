@@ -82,7 +82,8 @@ public class DbConfig {
     public String jdbcUrl() {
         return "jdbc:mysql://" + jdbcHost() + ":" + port + "/" + urlEncode(database)
                 + "?useUnicode=true"
-                + "&characterEncoding=utf8"
+                + "&characterEncoding=UTF-8"
+                + "&connectionCollation=utf8mb4_unicode_ci"
                 + "&useSSL=" + useSsl
                 + "&allowPublicKeyRetrieval=" + allowPublicKeyRetrieval
                 + "&serverTimezone=" + urlEncode(serverTimezone)

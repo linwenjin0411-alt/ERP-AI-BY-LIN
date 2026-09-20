@@ -113,10 +113,34 @@ public class DbUserRepository {
     }
 
     private void ensureSecurityColumns(Connection connection) throws SQLException {
+        DatabaseSchema.ensureVarcharLength(connection, "erp_users", "password_hash", 255, "password_hash varchar(255) not null");
         DatabaseSchema.ensureColumn(connection, "erp_users", "failed_login_count", "failed_login_count int not null default 0");
         DatabaseSchema.ensureColumn(connection, "erp_users", "locked_until", "locked_until timestamp null");
         DatabaseSchema.ensureColumn(connection, "erp_users", "password_changed_at", "password_changed_at timestamp null");
         DatabaseSchema.ensureColumn(connection, "erp_users", "password_expires_at", "password_expires_at timestamp null");
+    }
+
+    public void updatePasswordHash(String username, String passwordHash) throws SQLException {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        try {
+            connection = Database.connect(config);
+            ensureSecurityColumns(connection);
+            statement = connection.prepareStatement(
+                    "update erp_users set password_hash = ?, password_changed_at = current_timestamp "
+                            + "where lower(username) = lower(?) and active = 1"
+            );
+            statement.setString(1, passwordHash);
+            statement.setString(2, username);
+            statement.executeUpdate();
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+            if (connection != null) {
+                connection.close();
+            }
+        }
     }
 
     public int countUsers() throws SQLException {

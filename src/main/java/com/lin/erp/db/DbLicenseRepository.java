@@ -31,6 +31,7 @@ public class DbLicenseRepository {
     private static final int DEFAULT_API_CACHE_DAYS = 30;
     private static final int MAX_API_RESPONSE_BYTES = 65536;
     private static final String PRODUCT_CODE = "LinovaOneERP";
+    private static final String LICENSE_SCOPE = PRODUCT_CODE;
     private static final String SOURCE_DEMO = "demo";
     private static final String SOURCE_DATABASE = "database";
     private static final String SOURCE_ONLINE = "online";
@@ -78,8 +79,9 @@ public class DbLicenseRepository {
             statement = connection.prepareStatement(
                     "select license_key, valid_until, customer_name, product_code, modules, seat_policy, device_binding "
                             + "from erp_licenses "
-                            + "where active = 1 order by valid_until desc, id desc limit 1"
+                            + "where active = 1 and license_scope = ? order by valid_until desc, id desc limit 1"
             );
+            statement.setString(1, LICENSE_SCOPE);
             resultSet = statement.executeQuery();
             if (!resultSet.next()) {
                 return status(false, null, null, "NO_LICENSE", "No active database license.", "", "", "", "", false, SOURCE_DATABASE);
@@ -144,27 +146,30 @@ public class DbLicenseRepository {
             originalAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             deactivate = connection.prepareStatement(
-                    "update erp_licenses set active = 0, revoked_at = current_timestamp, updated_by = ? where active = 1"
+                    "update erp_licenses set active = 0, revoked_at = current_timestamp, updated_by = ? "
+                            + "where active = 1 and license_scope = ?"
             );
             deactivate.setString(1, auditUser(userCode));
+            deactivate.setString(2, LICENSE_SCOPE);
             deactivate.executeUpdate();
             insert = connection.prepareStatement(
-                    "insert into erp_licenses (license_key, valid_from, valid_until, active, created_by, updated_by, "
+                    "insert into erp_licenses (license_key, license_scope, valid_from, valid_until, active, created_by, updated_by, "
                             + "source_machine, customer_name, product_code, modules, seat_policy, device_binding, "
-                            + "last_verified_at, verify_source) values (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp, ?)"
+                            + "last_verified_at, verify_source) values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp, ?)"
             );
             insert.setString(1, licenseKey.trim());
-            insert.setDate(2, Date.valueOf(LocalDate.now()));
-            insert.setDate(3, Date.valueOf(apiStatus.getValidUntil()));
-            insert.setString(4, auditUser(userCode));
+            insert.setString(2, LICENSE_SCOPE);
+            insert.setDate(3, Date.valueOf(LocalDate.now()));
+            insert.setDate(4, Date.valueOf(apiStatus.getValidUntil()));
             insert.setString(5, auditUser(userCode));
-            insert.setString(6, localMachineName());
-            insert.setString(7, emptyToNull(apiStatus.getCustomerName()));
-            insert.setString(8, emptyToNull(apiStatus.getProductCode()));
-            insert.setString(9, emptyToNull(apiStatus.getModules()));
-            insert.setString(10, emptyToNull(apiStatus.getSeatPolicy()));
-            insert.setBoolean(11, apiStatus.isDeviceBindingEnabled());
-            insert.setString(12, SOURCE_ONLINE);
+            insert.setString(6, auditUser(userCode));
+            insert.setString(7, localMachineName());
+            insert.setString(8, emptyToNull(apiStatus.getCustomerName()));
+            insert.setString(9, emptyToNull(apiStatus.getProductCode()));
+            insert.setString(10, emptyToNull(apiStatus.getModules()));
+            insert.setString(11, emptyToNull(apiStatus.getSeatPolicy()));
+            insert.setBoolean(12, apiStatus.isDeviceBindingEnabled());
+            insert.setString(13, SOURCE_ONLINE);
             insert.executeUpdate();
             connection.commit();
             return status(true, licenseKey, apiStatus.getValidUntil(), apiStatus.getReasonCode(),
@@ -207,7 +212,7 @@ public class DbLicenseRepository {
             statement = connection.prepareStatement(
                     "update erp_licenses set valid_until = ?, customer_name = ?, product_code = ?, modules = ?, "
                             + "seat_policy = ?, device_binding = ?, last_verified_at = current_timestamp, "
-                            + "verify_source = ?, updated_by = ? where active = 1 and license_key = ?"
+                            + "verify_source = ?, updated_by = ? where active = 1 and license_scope = ? and license_key = ?"
             );
             statement.setDate(1, Date.valueOf(apiStatus.getValidUntil()));
             statement.setString(2, emptyToNull(apiStatus.getCustomerName()));
@@ -217,7 +222,8 @@ public class DbLicenseRepository {
             statement.setBoolean(6, apiStatus.isDeviceBindingEnabled());
             statement.setString(7, SOURCE_ONLINE);
             statement.setString(8, auditUser());
-            statement.setString(9, licenseKey);
+            statement.setString(9, LICENSE_SCOPE);
+            statement.setString(10, licenseKey);
             statement.executeUpdate();
         } finally {
             if (statement != null) {
@@ -239,9 +245,11 @@ public class DbLicenseRepository {
             connection = Database.connect(config);
             ensureSchema(connection);
             statement = connection.prepareStatement(
-                    "update erp_licenses set active = 0, revoked_at = current_timestamp, updated_by = ? where active = 1"
+                    "update erp_licenses set active = 0, revoked_at = current_timestamp, updated_by = ? "
+                            + "where active = 1 and license_scope = ?"
             );
             statement.setString(1, auditUser(userCode));
+            statement.setString(2, LICENSE_SCOPE);
             statement.executeUpdate();
         } finally {
             if (statement != null) {
@@ -434,10 +442,12 @@ public class DbLicenseRepository {
             statement = connection.prepareStatement(
                     "create table if not exists erp_licenses ("
                             + "id bigint primary key auto_increment,"
-                            + "license_key varchar(160) not null,"
+                            + "license_key varchar(500) not null,"
+                            + "license_scope varchar(120) not null default 'LinovaOneERP',"
                             + "valid_from date not null,"
                             + "valid_until date not null,"
                             + "active tinyint(1) not null default 1,"
+                            + "active_scope varchar(120) generated always as (case when active = 1 then license_scope else null end) stored,"
                             + "created_by varchar(80),"
                             + "updated_by varchar(80),"
                             + "source_machine varchar(160),"
@@ -452,6 +462,8 @@ public class DbLicenseRepository {
             }
         }
         widenLicenseKey(connection);
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "license_scope", "license_scope varchar(120) not null default 'LinovaOneERP'");
+        DatabaseSchema.ensureColumn(connection, "erp_licenses", "active_scope", "active_scope varchar(120) generated always as (case when active = 1 then license_scope else null end) stored");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "created_by", "created_by varchar(80)");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "updated_by", "updated_by varchar(80)");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "source_machine", "source_machine varchar(160)");
@@ -463,6 +475,28 @@ public class DbLicenseRepository {
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "last_verified_at", "last_verified_at timestamp null");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "verify_source", "verify_source varchar(40)");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "revoked_at", "revoked_at timestamp null");
+        collapseDuplicateActiveLicenses(connection);
+        DatabaseSchema.ensureIndex(connection, "erp_licenses", "uk_erp_licenses_active_scope", "unique key uk_erp_licenses_active_scope (active_scope)");
+        DatabaseSchema.ensureIndex(connection, "erp_licenses", "idx_erp_licenses_scope_active", "index idx_erp_licenses_scope_active (license_scope, active)");
+    }
+
+    private void collapseDuplicateActiveLicenses(Connection connection) throws SQLException {
+        PreparedStatement statement = null;
+        try {
+            statement = connection.prepareStatement(
+                    "update erp_licenses l "
+                            + "join (select license_scope, max(id) as keep_id from erp_licenses "
+                            + "where active = 1 group by license_scope having count(*) > 1) d "
+                            + "on d.license_scope = l.license_scope and l.id <> d.keep_id "
+                            + "set l.active = 0, l.revoked_at = coalesce(l.revoked_at, current_timestamp), l.updated_by = 'system' "
+                            + "where l.active = 1"
+            );
+            statement.executeUpdate();
+        } finally {
+            if (statement != null) {
+                statement.close();
+            }
+        }
     }
 
     private void widenLicenseKey(Connection connection) throws SQLException {

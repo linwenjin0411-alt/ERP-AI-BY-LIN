@@ -1,6 +1,7 @@
 package com.lin.erp.db;
 
 import com.lin.erp.config.DbConfig;
+import com.lin.erp.auth.PasswordHasher;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -274,6 +275,7 @@ public class DbAdminSecurityRepository {
     }
 
     private void ensureSchema(Connection connection) throws SQLException {
+        DatabaseSchema.ensureVarcharLength(connection, "erp_users", "password_hash", 255, "password_hash varchar(255) not null");
         DatabaseSchema.ensureColumn(connection, "erp_users", "failed_login_count", "failed_login_count int not null default 0");
         DatabaseSchema.ensureColumn(connection, "erp_users", "locked_until", "locked_until timestamp null");
         DatabaseSchema.ensureColumn(connection, "erp_users", "password_changed_at", "password_changed_at timestamp null");
@@ -401,18 +403,7 @@ public class DbAdminSecurityRepository {
     }
 
     private String hashPassword(String password) throws SQLException {
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(password.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder builder = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                builder.append(String.format("%02x", b & 0xff));
-            }
-            java.util.Arrays.fill(hash, (byte) 0);
-            return builder.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new SQLException("SHA-256 is not available.", e);
-        }
+        return PasswordHasher.hash(password);
     }
 
     private String temporaryPassword(String username) {
