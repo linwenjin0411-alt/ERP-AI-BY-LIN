@@ -447,7 +447,6 @@ public class DbLicenseRepository {
                             + "valid_from date not null,"
                             + "valid_until date not null,"
                             + "active tinyint(1) not null default 1,"
-                            + "active_scope varchar(120) generated always as (case when active = 1 then license_scope else null end) stored,"
                             + "created_by varchar(80),"
                             + "updated_by varchar(80),"
                             + "source_machine varchar(160),"
@@ -463,7 +462,6 @@ public class DbLicenseRepository {
         }
         widenLicenseKey(connection);
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "license_scope", "license_scope varchar(120) not null default 'LinovaOneERP'");
-        DatabaseSchema.ensureColumn(connection, "erp_licenses", "active_scope", "active_scope varchar(120) generated always as (case when active = 1 then license_scope else null end) stored");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "created_by", "created_by varchar(80)");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "updated_by", "updated_by varchar(80)");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "source_machine", "source_machine varchar(160)");
@@ -476,7 +474,6 @@ public class DbLicenseRepository {
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "verify_source", "verify_source varchar(40)");
         DatabaseSchema.ensureColumn(connection, "erp_licenses", "revoked_at", "revoked_at timestamp null");
         collapseDuplicateActiveLicenses(connection);
-        DatabaseSchema.ensureIndex(connection, "erp_licenses", "uk_erp_licenses_active_scope", "unique key uk_erp_licenses_active_scope (active_scope)");
         DatabaseSchema.ensureIndex(connection, "erp_licenses", "idx_erp_licenses_scope_active", "index idx_erp_licenses_scope_active (license_scope, active)");
     }
 
