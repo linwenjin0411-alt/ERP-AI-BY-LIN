@@ -254,6 +254,8 @@ public final class I18n {
         put("action.post", "Post", "过账", "転記");
         put("action.simulate", "Simulate", "模拟", "シミュレーション");
         put("action.export", "Export", "导出", "エクスポート");
+        put("action.printPreview", "Preview", "打印预览", "印刷プレビュー");
+        put("action.aiSummary", "AI Summary", "AI 摘要", "AI 要約");
         put("action.delete", "Delete", "删除", "削除");
         put("action.details", "Details", "详情", "詳細");
         put("action.ask", "Ask", "提问", "質問");
@@ -306,6 +308,7 @@ public final class I18n {
         put("menu.section.close", "Close", "结账", "締め");
         put("menu.section.aiAssist", "Assist", "辅助", "支援");
         put("menu.section.reports", "Reports", "报表", "レポート");
+        put("menu.area.reports", "Reports", "报表", "レポート");
         put("menu.section.users", "Users", "用户", "ユーザー");
         put("menu.section.roles", "Roles", "角色", "ロール");
         put("menu.section.audit", "Audit", "审计", "監査");

@@ -338,6 +338,16 @@ public class MainFrame extends JFrame {
                 "FINANCE_GL", "menu.finance.gl");
         addFallbackFunction("FINANCE", "FINANCE_CLOSE_AREA", "menu.area.finance.close", "FINANCE_PERIOD_SECTION", "menu.section.close",
                 "FINANCE_CLOSE", "menu.finance.close");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_SALES_DETAIL", "menu.report.salesDetail");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_PURCHASE_DETAIL", "menu.report.purchaseDetail");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_INVENTORY_DETAIL", "menu.report.inventoryDetail");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_AR_BALANCE", "menu.report.arBalance");
+        addFallbackFunction("FINANCE", "FINANCE_REPORT_AREA", "menu.area.reports", "FINANCE_REPORT_SECTION", "menu.section.reports",
+                "REPORT_AP_BALANCE", "menu.report.apBalance");
 
         addFallbackFunction("AI", "AI_COPILOT", "menu.area.ai.copilot", "AI_ASSIST_SECTION", "menu.section.aiAssist",
                 "AI_QUERY", "menu.ai.query");
@@ -1750,47 +1760,46 @@ public class MainFrame extends JFrame {
     }
 
     private void exportCurrentTable() {
-        logUserAction("EXPORT_START", "format=csv");
         if (currentModule == null || currentModule.getTableColumns().isEmpty()) {
             logUserAction("EXPORT_FAILURE", "reason=noTable");
             AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
             return;
         }
-
-        File exportDir = new File("exports");
-        if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
-            logUserAction("EXPORT_FAILURE", "reason=cannotCreateExportDirectory");
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
+        final ReportExportSupport.Format format = ReportExportSupport.chooseFormat(this);
+        if (format == null) {
             return;
         }
-
-        String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
-        File file = new File(exportDir, currentModule.getCode().toLowerCase() + "-" + timestamp + ".csv");
-        Writer writer = null;
-        try {
-            writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
-            writer.write('\ufeff');
-            writeCsvLine(writer, localized(currentModule.getTableColumns()));
-            String[][] rows = localizedRows(currentModule);
-            for (int i = 0; i < rows.length; i++) {
-                writeCsvLine(writer, rows[i]);
-            }
-            AppLogger.info("Exported ERP table. Module: " + currentModule.getCode() + ", file: " + file.getAbsolutePath());
-            logUserAction("EXPORT_SUCCESS", "file=" + file.getAbsolutePath() + " | rows=" + currentModule.getTableRows().size());
-            AppMessages.success(this, t("message.export.success") + file.getAbsolutePath());
-        } catch (Exception e) {
-            AppLogger.error("Export failed.", e);
-            logUserAction("EXPORT_FAILURE", "errorType=" + e.getClass().getSimpleName());
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (Exception ignored) {
-                    // Nothing else to do if the export stream fails while closing.
+        final ModulePageData module = currentModule;
+        final ReportExportSupport.Snapshot snapshot = new ReportExportSupport.Snapshot(
+                text(module.getTitleKey()),
+                module.getCode().toLowerCase(),
+                session.getUsername(),
+                "Module=" + module.getCode(),
+                localized(module.getTableColumns()),
+                localizedRows(module)
+        );
+        logUserAction("EXPORT_START", "format=" + format.name() + " | filters=Module=" + module.getCode());
+        BackgroundTasks.run(
+                this,
+                "Export failed.",
+                t("message.error.title"),
+                t("message.export.failed"),
+                new BackgroundTasks.Work<File>() {
+                    @Override
+                    public File run() throws Exception {
+                        return ReportExportSupport.export(snapshot, format);
+                    }
+                },
+                new BackgroundTasks.Success<File>() {
+                    @Override
+                    public void accept(File file) {
+                        AppLogger.info("Exported ERP table. Module: " + module.getCode() + ", file: " + file.getAbsolutePath());
+                        logUserAction("EXPORT_SUCCESS", "format=" + format.name()
+                                + " | file=" + file.getAbsolutePath() + " | rows=" + snapshot.rowCount());
+                        AppMessages.success(MainFrame.this, t("message.export.success") + file.getAbsolutePath());
+                    }
                 }
-            }
-        }
+        );
     }
 
     private void showSimulationResult() {
@@ -2019,20 +2028,57 @@ public class MainFrame extends JFrame {
 
     private void drillIntoMetric(ModulePageData.Metric metric) {
         String text = (text(metric.getLabelValue()) + " " + text(metric.getNoteValue())).toLowerCase(I18n.locale(session.getLanguage()));
-        String target = text.contains("stock") || text.contains("inventory") || text.contains("库存") || text.contains("在庫")
-                ? "INVENTORY"
+        String reportCode = text.contains("stock") || text.contains("inventory") || text.contains("库存") || text.contains("在庫")
+                ? "REPORT_INVENTORY_DETAIL"
                 : text.contains("purchase") || text.contains("采购") || text.contains("購買")
-                ? "PROCUREMENT"
+                ? "REPORT_PURCHASE_DETAIL"
                 : text.contains("sales") || text.contains("销售") || text.contains("販売")
-                ? "SALES"
-                : text.contains("finance") || text.contains("cash") || text.contains("财务") || text.contains("会計")
-                ? "FINANCE"
-                : "DASHBOARD";
+                ? "REPORT_SALES_DETAIL"
+                : text.contains("payable") || text.contains("ap") || text.contains("应付") || text.contains("買掛")
+                ? "REPORT_AP_BALANCE"
+                : text.contains("finance") || text.contains("cash") || text.contains("receivable") || text.contains("财务") || text.contains("会計")
+                ? "REPORT_AR_BALANCE"
+                : null;
+        MenuNode report = reportCode == null ? null : findMenuByCode(reportCode);
+        if (report != null) {
+            openFunctionWindow(report);
+            AppMessages.info(this, t("message.drilldown.opened") + text(report.getNameKey()));
+            return;
+        }
+        String target = reportCode == null ? "DASHBOARD" : "REPORTS";
         ModulePageData module = findModule(target);
         if (module != null) {
             showModule(module);
             AppMessages.info(this, t("message.drilldown.opened") + text(module.getTitleKey()));
         }
+    }
+
+    private MenuNode findMenuByCode(String code) {
+        for (List<MenuNode> roots : childMenusByModule.values()) {
+            for (MenuNode root : roots) {
+                MenuNode match = findMenuByCode(root, code);
+                if (match != null) {
+                    return match;
+                }
+            }
+        }
+        return null;
+    }
+
+    private MenuNode findMenuByCode(MenuNode node, String code) {
+        if (node == null) {
+            return null;
+        }
+        if (code.equals(node.getCode())) {
+            return node;
+        }
+        for (MenuNode child : node.getChildren()) {
+            MenuNode match = findMenuByCode(child, code);
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
     }
 
     private RoundedPanel createTablePanel(final ModulePageData data, String title, String[] columns, String[][] rows) {
@@ -2162,38 +2208,45 @@ public class MainFrame extends JFrame {
             AppMessages.error(this, t("message.error.title"), t("message.select.row"));
             return;
         }
-        File exportDir = new File("exports");
-        if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
+        final ReportExportSupport.Format format = ReportExportSupport.chooseFormat(this);
+        if (format == null) {
             return;
         }
-        File file = new File(exportDir, "selected-row-" + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".csv");
-        Writer writer = null;
-        try {
-            writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
-            writer.write('\ufeff');
-            String[] headers = new String[table.getColumnCount()];
-            String[] values = new String[table.getColumnCount()];
-            for (int i = 0; i < table.getColumnCount(); i++) {
-                headers[i] = table.getColumnName(i);
-                Object value = table.getValueAt(row, i);
-                values[i] = value == null ? "" : value.toString();
-            }
-            writeCsvLine(writer, headers);
-            writeCsvLine(writer, values);
-            AppMessages.success(this, t("message.export.success") + file.getAbsolutePath());
-        } catch (Exception e) {
-            AppLogger.error("Selected row export failed.", e);
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (Exception ignored) {
-                    // Row export already finished or failed.
-                }
-            }
+        String[] headers = new String[table.getColumnCount()];
+        String[] values = new String[table.getColumnCount()];
+        for (int i = 0; i < table.getColumnCount(); i++) {
+            headers[i] = table.getColumnName(i);
+            Object value = table.getValueAt(row, i);
+            values[i] = value == null ? "" : value.toString();
         }
+        final ReportExportSupport.Snapshot snapshot = new ReportExportSupport.Snapshot(
+                currentModule == null ? "Selected row" : text(currentModule.getTitleKey()),
+                "selected-row",
+                session.getUsername(),
+                "Selected row=" + row,
+                headers,
+                new String[][]{values}
+        );
+        logUserAction("EXPORT_ROW_START", "format=" + format.name() + " | row=" + row);
+        BackgroundTasks.run(
+                this,
+                "Selected row export failed.",
+                t("message.error.title"),
+                t("message.export.failed"),
+                new BackgroundTasks.Work<File>() {
+                    @Override
+                    public File run() throws Exception {
+                        return ReportExportSupport.export(snapshot, format);
+                    }
+                },
+                new BackgroundTasks.Success<File>() {
+                    @Override
+                    public void accept(File file) {
+                        logUserAction("EXPORT_ROW_SUCCESS", "format=" + format.name() + " | file=" + file.getAbsolutePath());
+                        AppMessages.success(MainFrame.this, t("message.export.success") + file.getAbsolutePath());
+                    }
+                }
+        );
     }
 
     private JPanel createProcessPanel(String title, String[] steps) {

@@ -39,11 +39,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -486,43 +481,38 @@ public class ItemMasterPanel extends JPanel {
     }
 
     private void export() {
-        File exportDir = new File("exports");
-        if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
-            logAction("ITEM_EXPORT_FAILURE", "reason=cannotCreateExportDirectory");
+        final ReportExportSupport.Format format = ReportExportSupport.chooseFormat(this);
+        if (format == null) {
             return;
         }
-
-        File file = new File(exportDir, "item-master-" + safeFilterSuffix()
-                + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".csv");
-        Writer writer = null;
-        try {
-            writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
-            writer.write('\ufeff');
-            writeCsvLine(writer, visibleColumnHeaders());
-            for (int viewRow = 0; viewRow < table.getRowCount(); viewRow++) {
-                String[] row = new String[table.getColumnCount()];
-                for (int column = 0; column < table.getColumnCount(); column++) {
-                    Object value = table.getValueAt(viewRow, column);
-                    row[column] = value == null ? "" : value.toString();
+        final ReportExportSupport.Snapshot snapshot = ReportExportSupport.snapshot(
+                t("menu.master.item"),
+                "item-master-" + safeFilterSuffix(),
+                session,
+                filterSummary(),
+                table
+        );
+        logAction("ITEM_EXPORT_START", "format=" + format.name() + " | filters=" + filterSummary());
+        BackgroundTasks.run(
+                this,
+                "Item master export failed.",
+                t("message.error.title"),
+                t("message.export.failed"),
+                new BackgroundTasks.Work<java.io.File>() {
+                    @Override
+                    public java.io.File run() throws Exception {
+                        return ReportExportSupport.export(snapshot, format);
+                    }
+                },
+                new BackgroundTasks.Success<java.io.File>() {
+                    @Override
+                    public void accept(java.io.File file) {
+                        AppMessages.success(ItemMasterPanel.this, t("message.export.success") + file.getAbsolutePath());
+                        logAction("ITEM_EXPORT_SUCCESS", "format=" + format.name()
+                                + " | file=" + file.getAbsolutePath() + " | rows=" + snapshot.rowCount());
+                    }
                 }
-                writeCsvLine(writer, row);
-            }
-            AppMessages.success(this, t("message.export.success") + file.getAbsolutePath());
-            logAction("ITEM_EXPORT_SUCCESS", "file=" + file.getAbsolutePath() + " | rows=" + records.size());
-        } catch (Exception e) {
-            AppLogger.error("Item master export failed.", e);
-            AppMessages.error(this, t("message.error.title"), t("message.export.failed"));
-            logAction("ITEM_EXPORT_FAILURE", "errorType=" + e.getClass().getSimpleName());
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (Exception ignored) {
-                    // Export already finished or failed; close errors are not actionable for the user.
-                }
-            }
-        }
+        );
     }
 
     private int selectedRow() {
@@ -620,23 +610,27 @@ public class ItemMasterPanel extends JPanel {
         return rows;
     }
 
-    private void writeCsvLine(Writer writer, String[] values) throws Exception {
-        for (int i = 0; i < values.length; i++) {
+    private String filterSummary() {
+        List<String> parts = new ArrayList<String>();
+        String filter = filterField == null ? "" : filterField.getText();
+        String status = statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString();
+        if (filter != null && filter.trim().length() > 0) {
+            parts.add("Search=" + filter.trim());
+        }
+        if (status.length() > 0) {
+            parts.add("Status=" + status);
+        }
+        if (parts.isEmpty()) {
+            return "None";
+        }
+        StringBuilder summary = new StringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
             if (i > 0) {
-                writer.write(",");
+                summary.append("; ");
             }
-            String value = values[i] == null ? "" : values[i];
-            writer.write("\"" + value.replace("\"", "\"\"") + "\"");
+            summary.append(parts.get(i));
         }
-        writer.write(System.lineSeparator());
-    }
-
-    private String[] visibleColumnHeaders() {
-        String[] headers = new String[table.getColumnCount()];
-        for (int i = 0; i < table.getColumnCount(); i++) {
-            headers[i] = table.getColumnName(i);
-        }
-        return headers;
+        return summary.toString();
     }
 
     private String t(String key) {

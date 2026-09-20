@@ -40,16 +40,11 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 
 public class BusinessFunctionPanel extends JPanel {
     private final Window owner;
@@ -64,6 +59,11 @@ public class BusinessFunctionPanel extends JPanel {
     private DefaultTableModel tableModel;
     private TableRowSorter<DefaultTableModel> tableSorter;
     private JTextField filterField;
+    private JTextField dateFromFilter;
+    private JTextField dateToFilter;
+    private JTextField organizationFilter;
+    private JTextField warehouseFilter;
+    private JTextField partnerFilter;
     private JComboBox<String> statusFilter;
     private JLabel countLabel;
     private JLabel totalLabel;
@@ -123,6 +123,13 @@ public class BusinessFunctionPanel extends JPanel {
             }
         });
         actions.add(filterField);
+        if (isReportPage()) {
+            dateFromFilter = addReportFilter(actions, "From");
+            dateToFilter = addReportFilter(actions, "To");
+            organizationFilter = addReportFilter(actions, "Org");
+            warehouseFilter = addReportFilter(actions, "Warehouse");
+            partnerFilter = addReportFilter(actions, "Partner");
+        }
         statusFilter = new JComboBox<String>(new String[]{"", "status.open", "status.released", "status.ready", "status.posted", "status.cancelled"});
         statusFilter.setPreferredSize(new Dimension(150, 34));
         statusFilter.setRenderer(new javax.swing.DefaultListCellRenderer() {
@@ -146,9 +153,37 @@ public class BusinessFunctionPanel extends JPanel {
         actions.add(createActionButton("action.edit", "action.edit"));
         actions.add(createActionButton("action.delete", "action.delete"));
         actions.add(createActionButton("action.refresh", "action.refresh"));
+        if (isReportPage()) {
+            actions.add(createActionButton("action.printPreview", "action.printPreview"));
+            actions.add(createActionButton("action.aiSummary", "action.ask"));
+        }
         actions.add(createActionButton("action.export", "action.export"));
         toolbar.add(actions, BorderLayout.EAST);
         return toolbar;
+    }
+
+    private JTextField addReportFilter(JPanel actions, String placeholder) {
+        JTextField field = new JTextField(7);
+        field.putClientProperty("JTextField.placeholderText", placeholder);
+        field.setBorder(AppTheme.emptyBorder(8, 10, 8, 10));
+        field.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+        });
+        actions.add(field);
+        return field;
     }
 
     private JButton createActionButton(final String actionKey, String iconKey) {
@@ -321,6 +356,10 @@ public class BusinessFunctionPanel extends JPanel {
             AppMessages.info(owner, t("message.refresh.done"));
         } else if ("action.export".equals(actionKey)) {
             export();
+        } else if ("action.printPreview".equals(actionKey)) {
+            showPrintPreview();
+        } else if ("action.aiSummary".equals(actionKey)) {
+            showAiSummary();
         }
     }
 
@@ -511,40 +550,93 @@ public class BusinessFunctionPanel extends JPanel {
     }
 
     private void export() {
-        File exportDir = new File("exports");
-        if (!exportDir.isDirectory() && !exportDir.mkdirs()) {
-            AppMessages.error(owner, t("message.error.title"), t("message.export.failed"));
+        final ReportExportSupport.Format format = ReportExportSupport.chooseFormat(owner);
+        if (format == null) {
             return;
         }
+        final ReportExportSupport.Snapshot snapshot = ReportExportSupport.snapshot(
+                text(function.getNameKey()),
+                function.getCode().toLowerCase() + "-" + safeFilterSuffix(),
+                session,
+                filterSummary(),
+                table
+        );
+        logAction("REPORT_EXPORT_START", "function=" + function.getCode() + " | format=" + format.name()
+                + " | filters=" + filterSummary());
+        BackgroundTasks.run(
+                owner,
+                "Report export failed.",
+                t("message.error.title"),
+                t("message.export.failed"),
+                new BackgroundTasks.Work<java.io.File>() {
+                    @Override
+                    public java.io.File run() throws Exception {
+                        return ReportExportSupport.export(snapshot, format);
+                    }
+                },
+                new BackgroundTasks.Success<java.io.File>() {
+                    @Override
+                    public void accept(java.io.File file) {
+                        logAction("REPORT_EXPORT_SUCCESS", "function=" + function.getCode()
+                                + " | format=" + format.name() + " | rows=" + snapshot.rowCount()
+                                + " | file=" + file.getAbsolutePath());
+                        AppMessages.success(owner, t("message.export.success") + file.getAbsolutePath());
+                    }
+                }
+        );
+    }
 
-        File file = new File(exportDir, function.getCode().toLowerCase() + "-"
-                + safeFilterSuffix()
-                + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".csv");
-        Writer writer = null;
-        try {
-            writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
-            writer.write('\ufeff');
-            writeCsvLine(writer, visibleColumnHeaders());
-            for (int viewRow = 0; viewRow < table.getRowCount(); viewRow++) {
-                String[] row = new String[table.getColumnCount()];
-                for (int column = 0; column < table.getColumnCount(); column++) {
-                    Object value = table.getValueAt(viewRow, column);
-                    row[column] = value == null ? "" : value.toString();
-                }
-                writeCsvLine(writer, row);
+    private void showPrintPreview() {
+        ReportExportSupport.Snapshot snapshot = ReportExportSupport.snapshot(
+                text(function.getNameKey()),
+                function.getCode().toLowerCase(),
+                session,
+                filterSummary(),
+                table
+        );
+        logAction("REPORT_PRINT_PREVIEW", "function=" + function.getCode() + " | rows=" + snapshot.rowCount());
+        ReportExportSupport.showPrintPreview(owner, snapshot);
+    }
+
+    private void showAiSummary() {
+        String summary = "Report summary\n"
+                + "Rows: " + table.getRowCount() + "\n"
+                + "Generated by: " + session.getUsername() + "\n"
+                + "Filters: " + filterSummary() + "\n"
+                + "Source: " + text(function.getNameKey()) + " visible report rows.";
+        logAction("REPORT_AI_SUMMARY", "function=" + function.getCode() + " | rows=" + table.getRowCount());
+        AppMessages.information(owner, t("action.aiSummary"), summary, t("dialog.confirm.ok"));
+    }
+
+    private boolean isReportPage() {
+        return function.getCode() != null && function.getCode().startsWith("REPORT_");
+    }
+
+    private String filterSummary() {
+        List<String> parts = new ArrayList<String>();
+        addFilterPart(parts, "Search", textValue(filterField));
+        addFilterPart(parts, "Status", statusFilter == null || statusFilter.getSelectedItem() == null ? "" : statusFilter.getSelectedItem().toString());
+        addFilterPart(parts, "From", textValue(dateFromFilter));
+        addFilterPart(parts, "To", textValue(dateToFilter));
+        addFilterPart(parts, "Org", textValue(organizationFilter));
+        addFilterPart(parts, "Warehouse", textValue(warehouseFilter));
+        addFilterPart(parts, "Partner", textValue(partnerFilter));
+        if (parts.isEmpty()) {
+            return "None";
+        }
+        StringBuilder summary = new StringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) {
+                summary.append("; ");
             }
-            AppMessages.success(owner, t("message.export.success") + file.getAbsolutePath());
-        } catch (Exception e) {
-            AppLogger.error("Function record export failed.", e);
-            AppMessages.error(owner, t("message.error.title"), t("message.export.failed"));
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (Exception ignored) {
-                    // Export already completed or failed.
-                }
-            }
+            summary.append(parts.get(i));
+        }
+        return summary.toString();
+    }
+
+    private void addFilterPart(List<String> parts, String name, String value) {
+        if (value != null && value.trim().length() > 0) {
+            parts.add(name + "=" + value.trim());
         }
     }
 
@@ -569,11 +661,58 @@ public class BusinessFunctionPanel extends JPanel {
         if (status.length() > 0) {
             filters.add(RowFilter.regexFilter("(?i)^" + java.util.regex.Pattern.quote(text(status)) + "$"));
         }
+        addTextFilter(filters, organizationFilter);
+        addTextFilter(filters, warehouseFilter);
+        addTextFilter(filters, partnerFilter);
+        addDateRangeFilter(filters);
         if (filters.isEmpty()) {
             tableSorter.setRowFilter(null);
             return;
         }
         tableSorter.setRowFilter(RowFilter.andFilter(filters));
+    }
+
+    private void addTextFilter(List<RowFilter<Object, Object>> filters, JTextField field) {
+        String value = textValue(field);
+        if (value.length() > 0) {
+            filters.add(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(value)));
+        }
+    }
+
+    private void addDateRangeFilter(List<RowFilter<Object, Object>> filters) {
+        final String from = normalizeDate(textValue(dateFromFilter));
+        final String to = normalizeDate(textValue(dateToFilter));
+        if (from.length() == 0 && to.length() == 0) {
+            return;
+        }
+        filters.add(new RowFilter<Object, Object>() {
+            @Override
+            public boolean include(Entry<?, ?> entry) {
+                for (int i = 0; i < entry.getValueCount(); i++) {
+                    String value = normalizeDate(String.valueOf(entry.getValue(i)));
+                    if (value.length() == 0) {
+                        continue;
+                    }
+                    if ((from.length() == 0 || value.compareTo(from) >= 0)
+                            && (to.length() == 0 || value.compareTo(to) <= 0)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        });
+    }
+
+    private String textValue(JTextField field) {
+        return field == null || field.getText() == null ? "" : field.getText().trim();
+    }
+
+    private String normalizeDate(String value) {
+        if (value == null) {
+            return "";
+        }
+        String digits = value.replaceAll("[^0-9]", "");
+        return digits.length() >= 8 ? digits.substring(0, 8) : "";
     }
 
     private String[] createDefaultFormValues() {
@@ -815,25 +954,6 @@ public class BusinessFunctionPanel extends JPanel {
             localized[i] = text(values[i]);
         }
         return localized;
-    }
-
-    private void writeCsvLine(Writer writer, String[] values) throws Exception {
-        for (int i = 0; i < values.length; i++) {
-            if (i > 0) {
-                writer.write(",");
-            }
-            String value = values[i] == null ? "" : values[i];
-            writer.write("\"" + value.replace("\"", "\"\"") + "\"");
-        }
-        writer.write(System.lineSeparator());
-    }
-
-    private String[] visibleColumnHeaders() {
-        String[] headers = new String[table.getColumnCount()];
-        for (int i = 0; i < table.getColumnCount(); i++) {
-            headers[i] = table.getColumnName(i);
-        }
-        return headers;
     }
 
     private String displayRecordId(FunctionRecord record) {
