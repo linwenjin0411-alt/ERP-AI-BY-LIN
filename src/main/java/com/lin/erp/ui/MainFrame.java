@@ -35,6 +35,8 @@ import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.MatteBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import java.awt.BorderLayout;
@@ -656,6 +658,22 @@ public class MainFrame extends JFrame {
                 runWorkspaceSearch();
             }
         });
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                refreshMenuFilter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                refreshMenuFilter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                refreshMenuFilter();
+            }
+        });
         tools.add(searchField);
 
         JButton searchButton = new JButton(t("function.search"));
@@ -697,6 +715,22 @@ public class MainFrame extends JFrame {
         });
         tools.add(languageBox);
 
+        JButton helpButton = new JButton(t("action.help"));
+        helpButton.putClientProperty("JButton.buttonType", "roundRect");
+        helpButton.putClientProperty("FlatLaf.style", "arc: 10; borderWidth: 1; focusWidth: 1");
+        helpButton.setBackground(Color.WHITE);
+        helpButton.setForeground(AppTheme.TEXT_PRIMARY);
+        helpButton.setFocusPainted(false);
+        helpButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        helpButton.setBorder(AppTheme.emptyBorder(9, 12, 9, 12));
+        helpButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                showAbout();
+            }
+        });
+        tools.add(helpButton);
+
         JPanel context = new JPanel(new GridLayout(0, 1, 0, 2));
         context.setOpaque(false);
         periodLabel = new JLabel("", SwingConstants.RIGHT);
@@ -715,8 +749,8 @@ public class MainFrame extends JFrame {
 
     private void refreshTexts() {
         setTitle(I18n.APP_NAME);
-        brandModeLabel.setText(t("app.demoMode"));
-        brandModeLabel.setVisible(!dbConfig.isEnabled());
+        brandModeLabel.setText(t(dbConfig.isEnabled() ? "app.productionMode" : "app.demoMode"));
+        brandModeLabel.setVisible(true);
         brandTaglineLabel.setText(t("app.tagline"));
         companyLabel.setText(text(session.getCompanyNameKey()));
         periodLabel.setText(t("top.period"));
@@ -804,6 +838,19 @@ public class MainFrame extends JFrame {
         return value == null ? "" : value.trim().toLowerCase(I18n.locale(session.getLanguage()));
     }
 
+    private void refreshMenuFilter() {
+        if (searchPlaceholderVisible || secondaryMenuListPanel == null) {
+            return;
+        }
+        refreshSecondaryMenu();
+        if (currentSubMenu != null) {
+            contentPanel.removeAll();
+            contentPanel.add(createPage(currentModule), BorderLayout.CENTER);
+            contentPanel.revalidate();
+            contentPanel.repaint();
+        }
+    }
+
     private void runWorkspaceSearch() {
         String query = searchQuery();
         if (query.length() == 0) {
@@ -882,6 +929,25 @@ public class MainFrame extends JFrame {
             }
         }
         return false;
+    }
+
+    private boolean matchesMenuTree(MenuNode node, String query) {
+        if (node == null || query.length() == 0) {
+            return true;
+        }
+        if (matches(query, text(node.getNameKey())) || matches(query, node.getCode())) {
+            return true;
+        }
+        for (MenuNode child : node.getChildren()) {
+            if (matchesMenuTree(child, query)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void showAbout() {
+        AppMessages.information(this, t("about.title"), t("about.body"), t("dialog.confirm.ok"));
     }
 
     private void showModule(ModulePageData module) {
@@ -973,7 +1039,11 @@ public class MainFrame extends JFrame {
         }
 
         secondaryMenuTitleLabel.setText(t("submenu.title"));
+        String query = searchQuery();
         for (MenuNode child : children) {
+            if (!matchesMenuTree(child, query)) {
+                continue;
+            }
             JButton button = createSecondaryMenuButton(child);
             secondaryMenuButtons.add(button);
             secondaryMenuListPanel.add(button);
@@ -1061,10 +1131,15 @@ public class MainFrame extends JFrame {
         int row = 0;
         for (MenuNode child : area.getChildren()) {
             if (child.hasChildren()) {
-                gbc.gridy = row++;
-                sections.add(createFunctionSection(child, child.getChildren()), gbc);
+                List<MenuNode> filtered = filteredFunctions(child.getChildren());
+                if (!filtered.isEmpty() || menuHeaderMatches(child)) {
+                    gbc.gridy = row++;
+                    sections.add(createFunctionSection(child, filtered.isEmpty() ? child.getChildren() : filtered), gbc);
+                }
             } else {
-                directFunctions.add(child);
+                if (menuHeaderMatches(child)) {
+                    directFunctions.add(child);
+                }
             }
         }
 
@@ -1094,6 +1169,25 @@ public class MainFrame extends JFrame {
         scrollPane.getVerticalScrollBar().setUnitIncrement(18);
         page.add(scrollPane, BorderLayout.CENTER);
         return page;
+    }
+
+    private List<MenuNode> filteredFunctions(List<MenuNode> functions) {
+        String query = searchQuery();
+        if (query.length() == 0) {
+            return functions;
+        }
+        List<MenuNode> filtered = new ArrayList<MenuNode>();
+        for (MenuNode function : functions) {
+            if (matchesMenuTree(function, query)) {
+                filtered.add(function);
+            }
+        }
+        return filtered;
+    }
+
+    private boolean menuHeaderMatches(MenuNode node) {
+        String query = searchQuery();
+        return query.length() == 0 || matches(query, text(node.getNameKey())) || matches(query, node.getCode());
     }
 
     private JPanel createFunctionSection(MenuNode section, List<MenuNode> functions) {
@@ -1797,6 +1891,7 @@ public class MainFrame extends JFrame {
                         logUserAction("EXPORT_SUCCESS", "format=" + format.name()
                                 + " | file=" + file.getAbsolutePath() + " | rows=" + snapshot.rowCount());
                         AppMessages.success(MainFrame.this, t("message.export.success") + file.getAbsolutePath());
+                        ReportExportSupport.confirmOpenFolder(MainFrame.this, session.getLanguage(), file);
                     }
                 }
         );
@@ -2101,6 +2196,7 @@ public class MainFrame extends JFrame {
         table.setSelectionBackground(new Color(194, 238, 229));
         table.setSelectionForeground(new Color(18, 84, 80));
         table.setBackground(Color.WHITE);
+        table.setDefaultRenderer(Object.class, new StatusBadgeTableCellRenderer());
         table.setComponentPopupMenu(createTablePopup(table));
         table.addMouseListener(new MouseAdapter() {
             @Override
@@ -2141,7 +2237,7 @@ public class MainFrame extends JFrame {
         JScrollPane scrollPane = new JScrollPane(table);
         scrollPane.setBorder(BorderFactory.createLineBorder(AppTheme.BORDER));
         card.add(scrollPane, BorderLayout.CENTER);
-        JLabel footer = new JLabel(rows.length == 0 ? t("table.empty") : t("table.rows") + rows.length);
+        JLabel footer = new JLabel(rows.length == 0 ? t("table.empty.action") : t("table.rows") + rows.length);
         footer.setForeground(AppTheme.TEXT_MUTED);
         footer.setFont(AppTheme.font(Font.PLAIN, 11));
         card.add(footer, BorderLayout.SOUTH);
@@ -2155,6 +2251,13 @@ public class MainFrame extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 copySelectedCell(table);
+            }
+        });
+        JMenuItem copyRow = new JMenuItem(t("table.menu.copyRow"));
+        copyRow.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                copySelectedRow(table);
             }
         });
         JMenuItem exportRow = new JMenuItem(t("table.menu.exportRow"));
@@ -2174,9 +2277,28 @@ public class MainFrame extends JFrame {
             }
         });
         menu.add(copy);
+        menu.add(copyRow);
         menu.add(exportRow);
         menu.add(details);
         return menu;
+    }
+
+    private void copySelectedRow(JTable table) {
+        int row = table.getSelectedRow();
+        if (row < 0) {
+            AppMessages.error(this, t("message.error.title"), t("message.select.row"));
+            return;
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < table.getColumnCount(); i++) {
+            if (i > 0) {
+                builder.append('\t');
+            }
+            Object value = table.getValueAt(row, i);
+            builder.append(value == null ? "" : value.toString());
+        }
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(builder.toString()), null);
+        AppMessages.info(this, t("message.copy.done"));
     }
 
     private void selectPopupRow(JTable table, MouseEvent event) {

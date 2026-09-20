@@ -1,12 +1,15 @@
 package com.lin.erp.ui;
 
 import com.lin.erp.auth.UserSession;
+import com.lin.erp.i18n.I18n;
+import com.lin.erp.i18n.Language;
 
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import java.awt.Component;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Window;
 import java.io.File;
@@ -111,6 +114,27 @@ final class ReportExportSupport {
             writeCsv(file, snapshot);
         }
         return file;
+    }
+
+    static void confirmOpenFolder(Component owner, Language language, File file) {
+        if (file == null || file.getParentFile() == null || !Desktop.isDesktopSupported()) {
+            return;
+        }
+        boolean open = AppMessages.confirm(
+                owner,
+                I18n.t(language, "export.openFolder.title"),
+                I18n.t(language, "export.openFolder.message") + "\n" + file.getAbsolutePath(),
+                I18n.t(language, "export.openFolder.action"),
+                I18n.t(language, "dialog.confirm.cancel")
+        );
+        if (!open) {
+            return;
+        }
+        try {
+            Desktop.getDesktop().open(file.getParentFile());
+        } catch (Exception e) {
+            AppMessages.error(owner, I18n.t(language, "message.error.title"), I18n.t(language, "export.openFolder.failed"));
+        }
     }
 
     static void showPrintPreview(Window owner, Snapshot snapshot) {

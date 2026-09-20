@@ -68,6 +68,7 @@ public class LoginFrame extends JFrame {
     private JLabel noteLabel;
     private JLabel titleLabel;
     private JLabel subtitleLabel;
+    private JLabel modeLabel;
     private JLabel usernameLabel;
     private JLabel passwordLabel;
     private JLabel companyLabel;
@@ -207,6 +208,16 @@ public class LoginFrame extends JFrame {
         panel.add(subtitleLabel, gbc);
 
         gbc.gridy++;
+        gbc.insets = new Insets(0, 0, 20, 0);
+        modeLabel = new JLabel();
+        modeLabel.setOpaque(true);
+        modeLabel.setForeground(dbConfig.isEnabled() ? new Color(20, 83, 45) : new Color(15, 118, 110));
+        modeLabel.setBackground(dbConfig.isEnabled() ? new Color(220, 252, 231) : AppTheme.ACCENT_SOFT);
+        modeLabel.setFont(AppTheme.font(Font.BOLD, 12));
+        modeLabel.setBorder(AppTheme.emptyBorder(6, 10, 6, 10));
+        panel.add(modeLabel, gbc);
+
+        gbc.gridy++;
         gbc.insets = new Insets(0, 0, 8, 0);
         usernameLabel = fieldLabel();
         panel.add(usernameLabel, gbc);
@@ -323,6 +334,8 @@ public class LoginFrame extends JFrame {
 
         titleLabel.setText(I18n.t(language, "login.title"));
         subtitleLabel.setText(I18n.t(language, "login.subtitle"));
+        modeLabel.setText(I18n.t(language, "login.mode.prefix")
+                + I18n.t(language, dbConfig.isEnabled() ? "app.productionMode" : "app.demoMode"));
         usernameLabel.setText(I18n.t(language, "login.user"));
         passwordLabel.setText(I18n.t(language, "login.password"));
         companyLabel.setText(I18n.t(language, "login.company"));
@@ -514,7 +527,11 @@ public class LoginFrame extends JFrame {
         root.setBackground(AppTheme.PAGE_BACKGROUND);
         root.setBorder(AppTheme.emptyBorder(18, 18, 18, 18));
 
-        JLabel message = new JLabel("<html>" + I18n.t(language, "license.prompt.message") + "</html>");
+        String prompt = I18n.t(language, "license.prompt.message");
+        if (!dbConfig.isEnabled()) {
+            prompt = prompt + "<br><br>" + I18n.t(language, "license.prompt.demoHint");
+        }
+        JLabel message = new JLabel("<html>" + prompt + "</html>");
         message.setForeground(AppTheme.TEXT_PRIMARY);
         message.setFont(AppTheme.font(Font.PLAIN, 13));
         root.add(message, BorderLayout.NORTH);

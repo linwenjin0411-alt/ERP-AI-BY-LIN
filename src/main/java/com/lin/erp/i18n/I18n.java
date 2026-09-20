@@ -33,6 +33,10 @@ public final class I18n {
                 "Demo mode · local sample data",
                 "当前为演示模式 · 本地示例数据",
                 "デモモード · ローカルサンプルデータ");
+        put("app.productionMode",
+                "Production mode · database connected",
+                "当前为生产模式 · 已连接数据库",
+                "本番モード · データベース接続");
         put("app.company",
                 "Linova Smart Manufacturing Ltd.",
                 "灵诺智能制造有限公司",
@@ -48,6 +52,7 @@ public final class I18n {
         put("login.remember", "Remember workstation note only", "仅标记本机提示", "端末メモのみ");
         put("login.button", "Sign in", "登录", "ログイン");
         put("login.test.account", "Demo account: admin / admin123", "测试账号：admin / admin123", "デモアカウント：admin / admin123");
+        put("login.mode.prefix", "Mode: ", "模式：", "モード：");
         put("login.footer", "Next: user master, RBAC, organization switch, and audit log.",
                 "后续可接入用户表、RBAC 权限、组织切换和操作审计。",
                 "次はユーザーマスタ、RBAC、組織切替、監査ログを接続します。");
@@ -87,6 +92,18 @@ public final class I18n {
         put("message.refresh.failed", "Refresh failed. See the app log for details.", "刷新失败，请查看应用日志。", "更新に失敗しました。アプリログを確認してください。");
         put("message.save.failed", "Save failed. See the app log for details.", "保存失败，请查看应用日志。", "保存に失敗しました。アプリログを確認してください。");
         put("message.export.failed", "Export failed. See the app log for details.", "导出失败，请查看应用日志。", "エクスポートに失敗しました。アプリログを確認してください。");
+        put("export.openFolder.title", "Export finished", "导出完成", "エクスポート完了");
+        put("export.openFolder.message", "Open the export folder?", "是否打开导出文件夹？", "エクスポートフォルダーを開きますか？");
+        put("export.openFolder.action", "Open folder", "打开文件夹", "フォルダーを開く");
+        put("export.openFolder.failed", "The export folder could not be opened.", "无法打开导出文件夹。", "エクスポートフォルダーを開けませんでした。");
+        put("about.title", "About Linova One ERP", "关于 Linova One ERP", "Linova One ERP について");
+        put("about.body", "Version: 0.1.0-SNAPSHOT\nBuild: local workspace\nRuntime: Java Swing desktop ERP",
+                "版本：0.1.0-SNAPSHOT\n构建：本地工作区\n运行时：Java Swing 桌面 ERP",
+                "バージョン: 0.1.0-SNAPSHOT\nビルド: ローカルワークスペース\nランタイム: Java Swing デスクトップ ERP");
+        put("action.help", "Help / About", "帮助 / 关于", "ヘルプ / 情報");
+        put("table.empty.action", "No rows yet. Use New, Refresh, or adjust filters.",
+                "暂无数据。请使用新建、刷新或调整筛选条件。",
+                "行がありません。新規、更新、またはフィルター調整を使用してください。");
         put("message.status.failed", "Status update failed. See the app log for details.", "状态更新失败，请查看应用日志。", "ステータス更新に失敗しました。アプリログを確認してください。");
         put("message.id.required", "The first column is required.", "第一列为必填项。", "最初の列は必須です。");
         put("message.no.status", "This table has no status column for the selected workflow action.", "当前表格没有可用于该流程操作的状态列。", "この表には選択したワークフロー操作に使えるステータス列がありません。");
@@ -104,6 +121,9 @@ public final class I18n {
         put("license.prompt.message", "Enter a signed license key. Format: LINOVA-yyyyMMdd-signature.",
                 "请输入签名许可证。格式：LINOVA-yyyyMMdd-signature。",
                 "署名付きライセンスキーを入力してください。形式：LINOVA-yyyyMMdd-signature。");
+        put("license.prompt.demoHint", "Demo mode: enter any text to continue.",
+                "演示模式：任意输入即可继续。",
+                "デモモード：任意の文字を入力すると続行できます。");
         put("license.required", "A valid license is required before sign-in can continue.",
                 "必须输入有效许可证后才能继续登录。",
                 "ログインを続行するには有効なライセンスが必要です。");
@@ -265,6 +285,7 @@ public final class I18n {
         put("table.empty", "No rows. Adjust filters or refresh.", "暂无记录，请调整筛选或刷新。", "行がありません。条件を変更するか更新してください。");
         put("table.rows", "Rows: ", "行数：", "行数：");
         put("table.menu.copyCell", "Copy cell", "复制单元格", "セルをコピー");
+        put("table.menu.copyRow", "Copy row", "复制整行", "行をコピー");
         put("table.menu.exportRow", "Export row", "导出当前行", "行をエクスポート");
         put("table.menu.details", "Open details", "打开详情", "詳細を開く");
 

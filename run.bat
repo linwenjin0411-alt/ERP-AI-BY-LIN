@@ -88,6 +88,7 @@ if "%NEED_BUILD%"=="1" (
   )
 
   echo Building Linova One ERP with Maven...
+  echo Please wait. First build may take a few minutes while dependencies are prepared.
   if not exist "build" mkdir "build"
   call mvn -q -DskipTests "-Dmaven.repo.local=%MAVEN_REPO%" package
   if errorlevel 1 (
