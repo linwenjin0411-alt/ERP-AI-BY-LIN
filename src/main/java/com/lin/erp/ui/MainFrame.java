@@ -108,6 +108,8 @@ public class MainFrame extends JFrame {
     private JLabel recentPageLabel;
     private JLabel periodLabel;
     private JTextField searchField;
+    private JButton topSearchButton;
+    private JButton helpButton;
     private JComboBox<Language> languageBox;
     private boolean refreshingLanguage;
     private boolean searchPlaceholderVisible;
@@ -676,21 +678,21 @@ public class MainFrame extends JFrame {
         });
         tools.add(searchField);
 
-        JButton searchButton = new JButton(t("function.search"));
-        searchButton.putClientProperty("JButton.buttonType", "roundRect");
-        searchButton.putClientProperty("FlatLaf.style", "arc: 10; borderWidth: 0; focusWidth: 1");
-        searchButton.setBackground(AppTheme.ACCENT);
-        searchButton.setForeground(Color.WHITE);
-        searchButton.setFocusPainted(false);
-        searchButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        searchButton.setBorder(AppTheme.emptyBorder(9, 14, 9, 14));
-        searchButton.addActionListener(new ActionListener() {
+        topSearchButton = new JButton(t("function.search"));
+        topSearchButton.putClientProperty("JButton.buttonType", "roundRect");
+        topSearchButton.putClientProperty("FlatLaf.style", "arc: 10; borderWidth: 0; focusWidth: 1");
+        topSearchButton.setBackground(AppTheme.ACCENT);
+        topSearchButton.setForeground(Color.WHITE);
+        topSearchButton.setFocusPainted(false);
+        topSearchButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        topSearchButton.setBorder(AppTheme.emptyBorder(9, 14, 9, 14));
+        topSearchButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 runWorkspaceSearch();
             }
         });
-        tools.add(searchButton);
+        tools.add(topSearchButton);
 
         languageBox = new JComboBox<Language>(Language.values());
         languageBox.setPreferredSize(new Dimension(124, 36));
@@ -715,7 +717,7 @@ public class MainFrame extends JFrame {
         });
         tools.add(languageBox);
 
-        JButton helpButton = new JButton(t("action.help"));
+        helpButton = new JButton(t("action.help"));
         helpButton.putClientProperty("JButton.buttonType", "roundRect");
         helpButton.putClientProperty("FlatLaf.style", "arc: 10; borderWidth: 1; focusWidth: 1");
         helpButton.setBackground(Color.WHITE);
@@ -754,6 +756,8 @@ public class MainFrame extends JFrame {
         brandTaglineLabel.setText(t("app.tagline"));
         companyLabel.setText(text(session.getCompanyNameKey()));
         periodLabel.setText(t("top.period"));
+        topSearchButton.setText(t("function.search"));
+        helpButton.setText(t("action.help"));
         applySearchPlaceholderIfEmpty();
         userLabel.setText(text(session.getDisplayNameKey()));
         roleLabel.setText(text(session.getRoleNameKey()));
