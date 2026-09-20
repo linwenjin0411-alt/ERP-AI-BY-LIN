@@ -57,6 +57,8 @@ Daily desktop use should start from `LinovaOneERP.exe`. It launches `run.bat` in
 
 When `LinovaOneERP.exe` is opened, the launcher starts `run.bat`. If `target/linova-one-erp.jar` is missing after a fresh clone, `run.bat` builds it with Maven first; this can take a few minutes on the first run. If startup fails before the app window opens, the launcher shows an error and writes a startup log under `logs/YYYYMMDD/`.
 
+If the desktop app was left running while code was rebuilt, close the app and run `LinovaOneERP - clean.bat`. It removes generated build output, rebuilds `target/linova-one-erp.jar`, and then starts `LinovaOneERP.exe`.
+
 Maintenance command-line startup:
 
 ```bat
