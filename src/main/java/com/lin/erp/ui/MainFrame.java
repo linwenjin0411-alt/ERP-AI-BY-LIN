@@ -1449,6 +1449,7 @@ public class MainFrame extends JFrame {
         table.setGridColor(new Color(237, 242, 247));
         table.setBackground(Color.WHITE);
         table.setSelectionBackground(AppTheme.ACCENT_SOFT);
+        TableAlignmentSupport.apply(table);
         table.getTableHeader().setReorderingAllowed(false);
         table.getTableHeader().setBackground(new Color(248, 250, 252));
         table.getTableHeader().setForeground(AppTheme.TEXT_MUTED);
@@ -2200,7 +2201,7 @@ public class MainFrame extends JFrame {
         table.setSelectionBackground(new Color(194, 238, 229));
         table.setSelectionForeground(new Color(18, 84, 80));
         table.setBackground(Color.WHITE);
-        table.setDefaultRenderer(Object.class, new StatusBadgeTableCellRenderer(rawRows(data)));
+        TableAlignmentSupport.apply(table, new StatusBadgeTableCellRenderer(rawRows(data)));
         table.setComponentPopupMenu(createTablePopup(table));
         table.addMouseListener(new MouseAdapter() {
             @Override

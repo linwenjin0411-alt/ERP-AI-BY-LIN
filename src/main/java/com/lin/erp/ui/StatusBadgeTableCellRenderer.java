@@ -28,9 +28,8 @@ final class StatusBadgeTableCellRenderer extends DefaultTableCellRenderer {
         String styleValue = semantic.length() == 0 ? text : semantic;
         if (isStatus(styleValue) && !isSelected) {
             label.setOpaque(true);
-            label.setHorizontalAlignment(CENTER);
+            TableAlignmentSupport.styleCell(label);
             label.setFont(AppTheme.font(Font.BOLD, 11));
-            label.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
             String lower = styleValue.toLowerCase();
             if (lower.contains("released") || lower.contains("posted") || lower.contains("ready")) {
                 label.setBackground(new Color(229, 250, 243));
@@ -46,8 +45,7 @@ final class StatusBadgeTableCellRenderer extends DefaultTableCellRenderer {
                 label.setForeground(new Color(15, 118, 110));
             }
         } else {
-            label.setHorizontalAlignment(LEFT);
-            label.setBorder(null);
+            TableAlignmentSupport.styleCell(label);
             label.setFont(AppTheme.font(Font.PLAIN, 12));
             if (!isSelected) {
                 label.setOpaque(true);

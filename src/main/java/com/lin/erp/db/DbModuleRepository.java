@@ -347,40 +347,93 @@ public class DbModuleRepository {
         Map<String, ModulePageData> modules = new LinkedHashMap<String, ModulePageData>();
         addDemoModule(modules, "DASHBOARD", "module.dashboard", "brand.flow", "DASHBOARD",
                 new String[]{"action.refresh"},
-                new String[]{"column.id", "column.status", "column.owner"},
-                new String[][]{{"TODAY", "status.ready", "owner.system"}});
+                new String[]{"column.id", "column.type", "column.status", "column.owner", "column.next"},
+                new String[][]{
+                        {"SO-2608-104", "term.salesOrder", "status.released", "owner.sales", "term.shipment"},
+                        {"MRP-2608-W34", "term.mrpRun", "status.shortage", "owner.planner", "term.purchaseRequest"},
+                        {"PR-2608-077", "term.purchaseRequest", "status.open", "owner.procurement", "term.purchaseOrder"},
+                        {"PO-45000127", "term.purchaseOrder", "status.late", "owner.procurement", "term.receipt"},
+                        {"MO-2608-004", "term.productionOrder", "status.blocked", "owner.production", "term.materialIssue"},
+                        {"AR-2608-018", "term.ar", "status.open", "owner.finance", "menu.finance.collection"}
+                });
         addDemoModule(modules, "MASTER", "cap.master", "master.subtitle", "OPERATIONAL",
                 defaultActions(),
-                new String[]{"column.id", "column.item", "column.name", "column.status"},
-                new String[][]{{"MAT-001", "FG-3007", "Smart actuator assembly", "status.open"}});
+                new String[]{"column.id", "column.item", "column.name", "column.status", "column.owner"},
+                new String[][]{
+                        {"FG-3007", "FG-3007", "Smart actuator assembly", "status.released", "owner.production"},
+                        {"FG-3041", "FG-3041", "Compact drive unit", "status.released", "owner.production"},
+                        {"RM-1008", "RM-1008", "Aluminum housing blank", "status.released", "owner.procurement"},
+                        {"PK-2210", "PK-2210", "Export carton set", "status.released", "owner.procurement"},
+                        {"CUS-3001", "Northwind Manufacturing", "NET30 / USD", "status.open", "owner.sales"},
+                        {"SUP-2007", "Sakura Metals", "NET45 / JPY", "status.released", "owner.procurement"}
+                });
         addDemoModule(modules, "PROCUREMENT", "cap.procurement", "procurement.subtitle", "OPERATIONAL",
                 workflowActions(),
-                new String[]{"column.id", "column.supplier", "column.item", "column.qty", "column.status"},
-                new String[][]{{"PO-DEMO-001", "SUP-2007", "RM-1008", "10", "status.open"}});
+                new String[]{"column.id", "column.supplier", "column.item", "column.qty", "column.status", "column.next"},
+                new String[][]{
+                        {"PR-2608-077", "Sakura Metals", "RM-1008", "1,200", "status.open", "term.purchaseOrder"},
+                        {"PO-45000127", "Kanto Package", "PK-2210", "2,000", "status.late", "term.receipt"},
+                        {"PO-45000132", "Sakura Metals", "RM-1008", "3,000", "status.released", "term.receipt"},
+                        {"GR-50001988", "Sakura Metals", "RM-1008", "1,200", "status.ready", "term.invoiceCheck"},
+                        {"PC-2608-021", "Sakura Metals", "$24,600", "1", "status.open", "term.payable"}
+                });
         addDemoModule(modules, "SALES", "cap.sales", "sales.subtitle", "OPERATIONAL",
                 workflowActions(),
-                new String[]{"column.id", "column.customer", "column.item", "column.qty", "column.status"},
-                new String[][]{{"SO-DEMO-001", "CUS-3001", "FG-3007", "6", "status.open"}});
+                new String[]{"column.id", "column.customer", "column.item", "column.qty", "column.status", "column.next"},
+                new String[][]{
+                        {"QT-2608-022", "Northwind Manufacturing", "FG-3007", "80", "status.open", "term.salesOrder"},
+                        {"SO-2608-104", "Taiyo Robotics", "FG-3007", "120", "status.released", "term.shipment"},
+                        {"SO-2608-118", "Northwind Manufacturing", "FG-3041", "80", "status.open", "term.delivery"},
+                        {"DN-2608-044", "Taiyo Robotics", "FG-3007", "80", "status.ready", "term.billing"},
+                        {"SA-2608-018", "Northwind Manufacturing", "$52,800", "1", "status.open", "term.receivable"}
+                });
         addDemoModule(modules, "INVENTORY", "cap.inventory", "inventory.subtitle", "OPERATIONAL",
                 defaultActions(),
-                new String[]{"column.id", "column.item", "column.warehouse", "column.qty", "column.status"},
-                new String[][]{{"STK-DEMO-001", "FG-3007", "FG-01", "24", "status.ready"}});
+                new String[]{"column.id", "column.item", "column.warehouse", "column.qty", "column.status", "column.next"},
+                new String[][]{
+                        {"STK-FG-3007", "FG-3007", "FG-01", "96", "status.ready", "term.shipment"},
+                        {"STK-FG-3041", "FG-3041", "FG-01", "42", "status.open", "term.productionOrder"},
+                        {"STK-RM-1008", "RM-1008", "WH-A", "420", "status.shortage", "term.purchaseOrder"},
+                        {"STK-PK-2210", "PK-2210", "WH-B", "80", "status.shortage", "term.purchaseRequest"},
+                        {"TRX-2608-031", "RM-1008", "WH-A", "+1,200", "status.ready", "term.materialIssue"}
+                });
         addDemoModule(modules, "MANUFACTURING", "cap.manufacturing", "manufacturing.subtitle", "OPERATIONAL",
                 workflowActions(),
-                new String[]{"column.id", "column.item", "column.qty", "column.status", "column.next"},
-                new String[][]{{"MO-DEMO-001", "FG-3007", "3", "status.open", "action.release"}});
+                new String[]{"column.id", "column.item", "column.qty", "column.status", "column.next", "column.owner"},
+                new String[][]{
+                        {"MRP-2608-W34", "FG-3007", "120", "status.shortage", "term.purchaseRequest", "owner.planner"},
+                        {"MO-2608-004", "FG-3007", "120", "status.blocked", "term.materialIssue", "owner.production"},
+                        {"MO-2608-005", "FG-3041", "80", "status.released", "term.confirmation", "owner.production"},
+                        {"ISS-2608-041", "RM-1008", "240", "status.open", "term.stockOverview", "owner.production"},
+                        {"COST-2608-009", "FG-3007", "$28,700", "status.ready", "term.gl", "owner.finance"}
+                });
         addDemoModule(modules, "FINANCE", "cap.finance", "finance.subtitle", "OPERATIONAL",
                 defaultActions(),
-                new String[]{"column.id", "column.customer", "column.amount", "column.status"},
-                new String[][]{{"AR-DEMO-001", "CUS-3001", "600", "status.open"}});
+                new String[]{"column.id", "column.customer", "column.amount", "column.status", "column.next"},
+                new String[][]{
+                        {"AR-2608-018", "Northwind Manufacturing", "$52,800", "status.open", "menu.finance.collection"},
+                        {"AR-2608-019", "Taiyo Robotics", "$124,600", "status.released", "term.gl"},
+                        {"AP-2608-021", "Sakura Metals", "$24,600", "status.open", "menu.finance.payment"},
+                        {"AP-2608-022", "Kanto Package", "$18,200", "status.released", "term.gl"},
+                        {"GL-2608-INV", "Inventory valuation", "$418,900", "status.ready", "term.close"}
+                });
         addDemoModule(modules, "AI", "cap.ai", "ai.subtitle", "AI",
                 new String[]{"action.refresh", "action.ask", "action.export"},
-                new String[]{"column.id", "column.status", "column.next"},
-                new String[][]{{"AI-DEMO-001", "status.ready", "action.details"}});
+                new String[]{"column.id", "column.type", "column.status", "column.owner", "column.next"},
+                new String[][]{
+                        {"AIQ-2608-001", "Inventory + MRP", "status.ready", "owner.planner", "MRP-2608-W34 shortage explanation"},
+                        {"AIQ-2608-002", "PO + production", "status.ready", "owner.procurement", "PO-45000127 late impact"},
+                        {"AIQ-2608-003", "Sales + finance", "status.ready", "owner.finance", "SO-2608-104 cash forecast"}
+                });
         addDemoModule(modules, "ADMIN", "cap.admin", "admin.subtitle", "OPERATIONAL",
                 defaultActions(),
-                new String[]{"column.id", "column.owner", "column.status"},
-                new String[][]{{"USR-admin", "owner.system", "status.open"}});
+                new String[]{"column.id", "column.owner", "column.status", "column.next"},
+                new String[][]{
+                        {"USR-admin", "owner.system", "status.released", "term.permissions"},
+                        {"USR-planner", "owner.planner", "status.open", "menu.admin.workflow"},
+                        {"ROLE-PLN", "role.planner", "status.released", "menu.admin.permissions"},
+                        {"AUD-2608-031", "admin", "status.ready", "menu.admin.audit"}
+                });
         return modules;
     }
 

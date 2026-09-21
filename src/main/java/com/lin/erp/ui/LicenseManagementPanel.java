@@ -127,6 +127,7 @@ class LicenseManagementPanel extends JPanel {
         table.setBackground(Color.WHITE);
         table.setSelectionBackground(AppTheme.ACCENT_SOFT);
         table.setSelectionForeground(AppTheme.TEXT_PRIMARY);
+        TableAlignmentSupport.apply(table);
         table.getTableHeader().setReorderingAllowed(false);
         table.getTableHeader().setBackground(new Color(248, 250, 252));
         table.getTableHeader().setForeground(AppTheme.TEXT_MUTED);
