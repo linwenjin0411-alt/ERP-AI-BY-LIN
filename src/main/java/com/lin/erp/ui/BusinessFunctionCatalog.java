@@ -6,6 +6,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class BusinessFunctionCatalog {
+    private static final int DEMO_FUNCTION_ROWS = 24;
+    private static final String[] DEMO_ITEMS = {"FG-3007", "FG-3041", "RM-1008", "PK-2210", "RM-1304", "SP-1020"};
+    private static final String[] DEMO_CUSTOMERS = {"Northwind Manufacturing", "Taiyo Robotics", "Apex Components", "Delta Medical", "Orion Mobility"};
+    private static final String[] DEMO_SUPPLIERS = {"Sakura Metals", "Kanto Package", "Global Resin", "Nippon Drives", "Osaka Logistics"};
+    private static final String[] DEMO_STATUSES = {"status.open", "status.released", "status.ready", "status.late", "status.blocked", "status.posted"};
+    private static final String[] DEMO_NEXT_STEPS = {"term.shipment", "term.receipt", "term.materialIssue", "term.confirmation", "term.payable", "term.receivable", "term.gl"};
+
     private static final Map<String, BusinessFunctionDefinition> DEFINITIONS =
             new LinkedHashMap<String, BusinessFunctionDefinition>();
 
@@ -32,9 +39,18 @@ public final class BusinessFunctionCatalog {
         return fallback(function);
     }
 
+    public static int minimumDemoRowCount() {
+        int minimum = Integer.MAX_VALUE;
+        for (BusinessFunctionDefinition definition : DEFINITIONS.values()) {
+            minimum = Math.min(minimum, definition.getTableRows().length);
+        }
+        return minimum == Integer.MAX_VALUE ? 0 : minimum;
+    }
+
     private static void add(String code, String[] fields, String[] values, String[] columns, String[][] rows,
                             String flow, String upstream, String downstream) {
-        DEFINITIONS.put(code, new BusinessFunctionDefinition(fields, values, persistenceKeys(code, fields), columns, rows, flow, upstream, downstream,
+        DEFINITIONS.put(code, new BusinessFunctionDefinition(fields, values, persistenceKeys(code, fields), columns,
+                expandedDemoRows(code, columns, rows, DEMO_FUNCTION_ROWS), flow, upstream, downstream,
                 numberingRule(code), "LINOVA / JP01 / FY2026-08", isReadOnlyPage(code)));
     }
 
@@ -121,14 +137,142 @@ public final class BusinessFunctionCatalog {
                 transactionFields(),
                 new String[]{codePrefix(code) + "-260831", "2026/08/31", "status.open", "LINOVA-001", "FG-3007", "120", "JP01", "user.admin.name", code},
                 transactionColumns(),
-                new String[][]{
+                expandedDemoRows(code, transactionColumns(), new String[][]{
                         {"1", "FG-3007", "120", "status.open", "action.details"},
                         {"2", "RM-1008", "420", "status.released", "term.stockOverview"}
-                },
+                }, DEMO_FUNCTION_ROWS),
                 module + " business page",
                 "Master data and source document",
                 "Next business page and operation audit"
         );
+    }
+
+    private static String[][] expandedDemoRows(String code, String[] columns, String[][] seedRows, int targetRows) {
+        if (seedRows == null || seedRows.length == 0 || seedRows.length >= targetRows) {
+            return seedRows;
+        }
+        int columnCount = columns == null ? seedRows[0].length : columns.length;
+        String[][] rows = new String[targetRows][columnCount];
+        for (int rowIndex = 0; rowIndex < targetRows; rowIndex++) {
+            String[] seed = seedRows[rowIndex % seedRows.length];
+            String[] row = new String[columnCount];
+            for (int columnIndex = 0; columnIndex < columnCount; columnIndex++) {
+                String value = columnIndex < seed.length && seed[columnIndex] != null ? seed[columnIndex] : "";
+                row[columnIndex] = demoValue(code, columns, columnIndex, value, rowIndex);
+            }
+            rows[rowIndex] = row;
+        }
+        return rows;
+    }
+
+    private static String demoValue(String code, String[] columns, int columnIndex, String value, int rowIndex) {
+        String column = columns != null && columnIndex < columns.length ? columns[columnIndex] : "";
+        int sequence = rowIndex + 1;
+        if (columnIndex == 0 && isLineColumn(column)) {
+            return String.valueOf(sequence * 10);
+        }
+        if (columnIndex == 0 && looksLikeDocument(value)) {
+            return documentNumber(code, value, sequence);
+        }
+        if ("column.id".equals(column) && looksLikeDocument(value)) {
+            return documentNumber(code, value, sequence);
+        }
+        if ("column.date".equals(column) || "column.due".equals(column)) {
+            return "2026-09-" + twoDigits((sequence % 18) + 1);
+        }
+        if ("column.item".equals(column)) {
+            return DEMO_ITEMS[rowIndex % DEMO_ITEMS.length];
+        }
+        if ("column.customer".equals(column)) {
+            return DEMO_CUSTOMERS[rowIndex % DEMO_CUSTOMERS.length];
+        }
+        if ("column.supplier".equals(column)) {
+            return DEMO_SUPPLIERS[rowIndex % DEMO_SUPPLIERS.length];
+        }
+        if ("column.qty".equals(column) || "column.demand".equals(column)
+                || "column.stock".equals(column) || "column.ordered".equals(column)
+                || "column.wip".equals(column) || "column.netDemand".equals(column)) {
+            return quantityValue(value, rowIndex);
+        }
+        if ("column.amount".equals(column) || column.endsWith("Cost") || "column.actualCost".equals(column)
+                || "column.standardCost".equals(column)) {
+            return amountValue(value, rowIndex);
+        }
+        if ("column.status".equals(column)) {
+            return DEMO_STATUSES[rowIndex % DEMO_STATUSES.length];
+        }
+        if ("column.next".equals(column)) {
+            return DEMO_NEXT_STEPS[rowIndex % DEMO_NEXT_STEPS.length];
+        }
+        if ("column.risk".equals(column)) {
+            return rowIndex % 3 == 0 ? "risk.high" : rowIndex % 3 == 1 ? "risk.medium" : "risk.low";
+        }
+        if ("column.owner".equals(column)) {
+            return rowIndex % 4 == 0 ? "owner.sales" : rowIndex % 4 == 1 ? "owner.procurement"
+                    : rowIndex % 4 == 2 ? "owner.production" : "owner.finance";
+        }
+        return value;
+    }
+
+    private static boolean isLineColumn(String column) {
+        return "function.table.line".equals(column);
+    }
+
+    private static boolean looksLikeDocument(String value) {
+        return value != null && value.indexOf('-') > 0;
+    }
+
+    private static String documentNumber(String code, String seed, int sequence) {
+        String prefix = seed;
+        int dash = seed == null ? -1 : seed.indexOf('-');
+        if (dash > 0) {
+            prefix = seed.substring(0, dash);
+        }
+        if (prefix == null || prefix.trim().length() == 0) {
+            prefix = codePrefix(code);
+        }
+        return prefix + "-2609-" + threeDigits(sequence);
+    }
+
+    private static String quantityValue(String value, int rowIndex) {
+        int base = parseNumber(value, 80);
+        int amount = Math.max(1, base + (rowIndex % 6) * 20 - (rowIndex % 3) * 5);
+        return String.valueOf(amount);
+    }
+
+    private static String amountValue(String value, int rowIndex) {
+        int base = parseNumber(value, 18000);
+        int amount = base + (rowIndex % 8) * 2400;
+        return "$" + amount;
+    }
+
+    private static int parseNumber(String value, int fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String digits = value.replaceAll("[^0-9-]", "");
+        if (digits.length() == 0 || "-".equals(digits)) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static String twoDigits(int value) {
+        return value < 10 ? "0" + value : String.valueOf(value);
+    }
+
+    private static String threeDigits(int value) {
+        if (value < 10) {
+            return "00" + value;
+        }
+        if (value < 100) {
+            return "0" + value;
+        }
+        return String.valueOf(value);
     }
 
     private static String codePrefix(String code) {

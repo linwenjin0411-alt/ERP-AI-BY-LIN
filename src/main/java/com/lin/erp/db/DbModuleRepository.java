@@ -13,6 +13,13 @@ import java.util.List;
 import java.util.Map;
 
 public class DbModuleRepository {
+    private static final int DEMO_MODULE_ROWS = 20;
+    private static final String[] DEMO_ITEMS = {"FG-3007", "FG-3041", "RM-1008", "PK-2210", "RM-1304", "SP-1020"};
+    private static final String[] DEMO_PARTNERS = {"Northwind Manufacturing", "Taiyo Robotics", "Sakura Metals", "Kanto Package", "Global Resin", "Apex Components"};
+    private static final String[] DEMO_STATUSES = {"status.open", "status.released", "status.ready", "status.late", "status.blocked", "status.posted"};
+    private static final String[] DEMO_NEXT_STEPS = {"term.shipment", "term.receipt", "term.materialIssue", "term.confirmation", "term.payable", "term.receivable", "term.gl"};
+    private static final String[] DEMO_OWNERS = {"owner.sales", "owner.procurement", "owner.production", "owner.finance", "owner.planner", "owner.system"};
+
     private static final Map<String, ModulePageData> DEMO_MODULES = createDemoModules();
 
     private final DbConfig config;
@@ -41,6 +48,16 @@ public class DbModuleRepository {
                 connection.close();
             }
         }
+    }
+
+    public static int minimumDemoModuleRowCount() {
+        int minimum = Integer.MAX_VALUE;
+        synchronized (DEMO_MODULES) {
+            for (ModulePageData module : DEMO_MODULES.values()) {
+                minimum = Math.min(minimum, module.getTableRows().size());
+            }
+        }
+        return minimum == Integer.MAX_VALUE ? 0 : minimum;
     }
 
     public int insertTableRow(String moduleCode, String[] values) throws SQLException {
@@ -460,12 +477,108 @@ public class DbModuleRepository {
             module.getTableColumns().add(column);
         }
         int sortOrder = 10;
-        for (String[] row : rows) {
+        String[][] demoRows = expandedDemoRows(code, columns, rows, DEMO_MODULE_ROWS);
+        for (String[] row : demoRows) {
             module.addTableRow(sortOrder, copy(row));
             sortOrder += 10;
         }
         module.getFocusItems().add("Demo data is stored locally for this session.");
         modules.put(code, module);
+    }
+
+    private static String[][] expandedDemoRows(String code, String[] columns, String[][] seedRows, int targetRows) {
+        if (seedRows == null || seedRows.length == 0 || seedRows.length >= targetRows) {
+            return seedRows;
+        }
+        int columnCount = columns == null ? seedRows[0].length : columns.length;
+        String[][] rows = new String[targetRows][columnCount];
+        for (int rowIndex = 0; rowIndex < targetRows; rowIndex++) {
+            String[] seed = seedRows[rowIndex % seedRows.length];
+            String[] row = new String[columnCount];
+            for (int columnIndex = 0; columnIndex < columnCount; columnIndex++) {
+                String value = columnIndex < seed.length && seed[columnIndex] != null ? seed[columnIndex] : "";
+                row[columnIndex] = demoValue(code, columns, columnIndex, value, rowIndex);
+            }
+            rows[rowIndex] = row;
+        }
+        return rows;
+    }
+
+    private static String demoValue(String code, String[] columns, int columnIndex, String value, int rowIndex) {
+        String column = columns != null && columnIndex < columns.length ? columns[columnIndex] : "";
+        int sequence = rowIndex + 1;
+        if (columnIndex == 0 && looksLikeDocument(value)) {
+            return documentNumber(code, value, sequence);
+        }
+        if ("column.id".equals(column) && looksLikeDocument(value)) {
+            return documentNumber(code, value, sequence);
+        }
+        if ("column.item".equals(column)) {
+            return DEMO_ITEMS[rowIndex % DEMO_ITEMS.length];
+        }
+        if ("column.customer".equals(column) || "column.supplier".equals(column)) {
+            return DEMO_PARTNERS[rowIndex % DEMO_PARTNERS.length];
+        }
+        if ("column.qty".equals(column)) {
+            return String.valueOf(Math.max(1, parseNumber(value, 80) + (rowIndex % 7) * 15));
+        }
+        if ("column.amount".equals(column)) {
+            return "$" + (parseNumber(value, 18000) + (rowIndex % 9) * 2200);
+        }
+        if ("column.status".equals(column)) {
+            return DEMO_STATUSES[rowIndex % DEMO_STATUSES.length];
+        }
+        if ("column.next".equals(column)) {
+            return DEMO_NEXT_STEPS[rowIndex % DEMO_NEXT_STEPS.length];
+        }
+        if ("column.owner".equals(column)) {
+            return DEMO_OWNERS[rowIndex % DEMO_OWNERS.length];
+        }
+        if ("column.type".equals(column) && value != null && value.length() > 0) {
+            return value;
+        }
+        return value;
+    }
+
+    private static boolean looksLikeDocument(String value) {
+        return value != null && value.indexOf('-') > 0;
+    }
+
+    private static String documentNumber(String code, String seed, int sequence) {
+        String prefix = seed;
+        int dash = seed == null ? -1 : seed.indexOf('-');
+        if (dash > 0) {
+            prefix = seed.substring(0, dash);
+        }
+        if (prefix == null || prefix.trim().length() == 0) {
+            prefix = code == null || code.length() <= 3 ? "DOC" : code.substring(0, 3);
+        }
+        return prefix + "-2609-" + threeDigits(sequence);
+    }
+
+    private static int parseNumber(String value, int fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String digits = value.replaceAll("[^0-9-]", "");
+        if (digits.length() == 0 || "-".equals(digits)) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static String threeDigits(int value) {
+        if (value < 10) {
+            return "00" + value;
+        }
+        if (value < 100) {
+            return "0" + value;
+        }
+        return String.valueOf(value);
     }
 
     private static List<ModulePageData> copyDemoModules() {
