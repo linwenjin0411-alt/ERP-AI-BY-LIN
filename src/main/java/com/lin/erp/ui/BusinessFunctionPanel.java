@@ -270,7 +270,7 @@ public class BusinessFunctionPanel extends JPanel {
         table.setBackground(Color.WHITE);
         table.setSelectionBackground(AppTheme.ACCENT_SOFT);
         table.setSelectionForeground(AppTheme.TEXT_PRIMARY);
-        table.setDefaultRenderer(Object.class, new StatusBadgeTableCellRenderer());
+        TableAlignmentSupport.apply(table, new StatusBadgeTableCellRenderer());
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {

@@ -36,19 +36,23 @@ public final class ExportDiagnostics {
                 Language.EN
         );
         ReportExportSupport.Snapshot snapshot = new ReportExportSupport.Snapshot(
-                "Export diagnostic",
+                "Export diagnostic 导出诊断 エクスポート診断",
                 "export-diagnostic",
                 session.getUsername(),
-                "Smoke test",
-                new String[]{"ID", "Status", "Owner"},
-                new String[][]{{"EXP-0001", "Ready", "System"}}
+                "Smoke test / 中文 / 日本語",
+                new String[]{"ID", "Status 状态 ステータス", "Owner 负责人 担当"},
+                new String[][]{
+                        {"EXP-0001", "Ready 就绪 準備完了", "System 系统 システム"},
+                        {"EXP-0002", "Late 延期 遅延", "Procurement 采购 購買"}
+                }
         );
-        File file = ReportExportSupport.export(snapshot, ReportExportSupport.Format.CSV);
-        if (!file.isFile() || file.length() == 0) {
-            throw new IllegalStateException("Export diagnostic did not create a file.");
+        File csvFile = ReportExportSupport.export(snapshot, ReportExportSupport.Format.CSV);
+        File pdfFile = ReportExportSupport.export(snapshot, ReportExportSupport.Format.PDF);
+        if (!csvFile.isFile() || csvFile.length() == 0 || !pdfFile.isFile() || pdfFile.length() == 0) {
+            throw new IllegalStateException("Export diagnostic did not create expected files.");
         }
         System.out.println("Export diagnostic succeeded.");
-        System.out.println("File: " + file.getAbsolutePath());
-        System.out.println("Bytes: " + file.length());
+        System.out.println("CSV: " + csvFile.getAbsolutePath() + " (" + csvFile.length() + " bytes)");
+        System.out.println("PDF: " + pdfFile.getAbsolutePath() + " (" + pdfFile.length() + " bytes)");
     }
 }

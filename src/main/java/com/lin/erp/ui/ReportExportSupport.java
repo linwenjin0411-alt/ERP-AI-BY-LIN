@@ -12,6 +12,7 @@ import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Window;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
@@ -219,37 +220,39 @@ final class ReportExportSupport {
         for (int i = 0; i < preview.length && i < 52; i++) {
             lines.add(preview[i]);
         }
+        CjkFontSpec font = cjkFontFor(lines);
         StringBuilder content = new StringBuilder();
         content.append("BT /F1 10 Tf 36 806 Td 14 TL\n");
         for (String line : lines) {
-            content.append("(").append(pdf(line)).append(") Tj T*\n");
+            content.append("<").append(utf16Hex(line)).append("> Tj T*\n");
         }
         content.append("ET\n");
         byte[] stream = content.toString().getBytes(StandardCharsets.US_ASCII);
-        StringBuilder pdf = new StringBuilder();
+        ByteArrayOutputStream pdf = new ByteArrayOutputStream();
         List<Integer> offsets = new ArrayList<Integer>();
-        pdf.append("%PDF-1.4\n");
-        offsets.add(pdf.length());
-        pdf.append("1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n");
-        offsets.add(pdf.length());
-        pdf.append("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n");
-        offsets.add(pdf.length());
-        pdf.append("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n");
-        offsets.add(pdf.length());
-        pdf.append("4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n");
-        offsets.add(pdf.length());
-        pdf.append("5 0 obj << /Length ").append(stream.length).append(" >> stream\n");
-        pdf.append(content).append("endstream endobj\n");
-        int xref = pdf.length();
-        pdf.append("xref\n0 6\n0000000000 65535 f \n");
+        writeAscii(pdf, "%PDF-1.4\n");
+        writeObject(pdf, offsets, 1, "<< /Type /Catalog /Pages 2 0 R >>");
+        writeObject(pdf, offsets, 2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+        writeObject(pdf, offsets, 3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>");
+        writeObject(pdf, offsets, 4, "<< /Type /Font /Subtype /Type0 /BaseFont /" + font.baseFont
+                + " /Encoding /" + font.encoding + " /DescendantFonts [6 0 R] >>");
+        offsets.add(Integer.valueOf(pdf.size()));
+        writeAscii(pdf, "5 0 obj << /Length " + stream.length + " >> stream\n");
+        pdf.write(stream);
+        writeAscii(pdf, "endstream endobj\n");
+        writeObject(pdf, offsets, 6, "<< /Type /Font /Subtype /CIDFontType0 /BaseFont /" + font.baseFont
+                + " /CIDSystemInfo << /Registry (Adobe) /Ordering (" + font.ordering
+                + ") /Supplement " + font.supplement + " >> >>");
+        int xref = pdf.size();
+        writeAscii(pdf, "xref\n0 7\n0000000000 65535 f \n");
         for (Integer offset : offsets) {
-            pdf.append(String.format("%010d 00000 n \n", offset.intValue()));
+            writeAscii(pdf, String.format("%010d 00000 n \n", offset.intValue()));
         }
-        pdf.append("trailer << /Size 6 /Root 1 0 R >>\nstartxref\n").append(xref).append("\n%%EOF");
+        writeAscii(pdf, "trailer << /Size 7 /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF");
         FileOutputStream output = null;
         try {
             output = new FileOutputStream(file);
-            output.write(pdf.toString().getBytes(StandardCharsets.US_ASCII));
+            output.write(pdf.toByteArray());
         } finally {
             if (output != null) {
                 output.close();
@@ -304,14 +307,63 @@ final class ReportExportSupport {
         return (value == null ? "" : value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
-    private static String pdf(String value) {
-        return (value == null ? "" : value).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-                .replaceAll("[^\\x20-\\x7E]", "?");
+    private static void writeObject(ByteArrayOutputStream output, List<Integer> offsets, int id, String body) throws Exception {
+        offsets.add(Integer.valueOf(output.size()));
+        writeAscii(output, id + " 0 obj " + body + " endobj\n");
+    }
+
+    private static void writeAscii(ByteArrayOutputStream output, String value) throws Exception {
+        output.write(value.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private static String utf16Hex(String value) {
+        byte[] bytes = (value == null ? "" : value).getBytes(StandardCharsets.UTF_16BE);
+        StringBuilder hex = new StringBuilder("FEFF");
+        for (byte b : bytes) {
+            hex.append(String.format("%02X", b & 0xff));
+        }
+        return hex.toString();
+    }
+
+    private static CjkFontSpec cjkFontFor(List<String> lines) {
+        for (String line : lines) {
+            if (containsJapaneseKana(line)) {
+                return new CjkFontSpec("HeiseiKakuGo-W5", "UniJIS-UCS2-H", "Japan1", 2);
+            }
+        }
+        return new CjkFontSpec("STSong-Light", "UniGB-UCS2-H", "GB1", 2);
+    }
+
+    private static boolean containsJapaneseKana(String value) {
+        if (value == null) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if ((ch >= '\u3040' && ch <= '\u30ff') || (ch >= '\uff66' && ch <= '\uff9f')) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String sanitizeFilePrefix(String value) {
         String normalized = value == null ? "report" : value.trim().toLowerCase();
         normalized = normalized.replaceAll("[^a-z0-9._-]+", "-");
         return normalized.length() == 0 ? "report" : normalized;
+    }
+
+    private static final class CjkFontSpec {
+        private final String baseFont;
+        private final String encoding;
+        private final String ordering;
+        private final int supplement;
+
+        private CjkFontSpec(String baseFont, String encoding, String ordering, int supplement) {
+            this.baseFont = baseFont;
+            this.encoding = encoding;
+            this.ordering = ordering;
+            this.supplement = supplement;
+        }
     }
 }

@@ -188,6 +188,7 @@ public class AiAssistantPanel extends JPanel {
         table.setRowHeight(34);
         table.setSelectionBackground(AppTheme.ACCENT_SOFT);
         table.setSelectionForeground(AppTheme.TEXT_PRIMARY);
+        TableAlignmentSupport.apply(table);
         JTableHeader header = table.getTableHeader();
         header.setReorderingAllowed(false);
         header.setFont(AppTheme.font(Font.BOLD, 12));
